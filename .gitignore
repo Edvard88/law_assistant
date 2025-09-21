@@ -1,0 +1,23 @@
+# VS Code specific files
+    .vscode/
+
+    # Node.js dependencies
+    node_modules/
+
+    # Log files
+    *.log
+
+    # Environment variables
+    .env
+    .env.*
+
+    .venv
+    .venv.*
+    
+    # Build artifacts
+    build/
+    dist/
+
+    # Operating System generated files
+    .DS_Store
+    Thumbs.db
