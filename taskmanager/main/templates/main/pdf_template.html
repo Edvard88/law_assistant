@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Претензия</title>
+    <style>
+        body {
+            font-family: 'Times New Roman', serif;
+            margin: 50px;
+            line-height: 1.5;
+        }
+        .header {
+            text-align: right;
+            margin-bottom: 30px;
+        }
+        .content {
+            margin-bottom: 20px;
+        }
+        .signature {
+            margin-top: 50px;
+        }
+        .date {
+            margin-top: 20px;
+        }
+        .field {
+            border-bottom: 1px solid black;
+            display: inline-block;
+            min-width: 200px;
+            margin: 0 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <p>Общество с ограниченной ответственностью «Консент»</p>
+        <p>125362, Г.МОСКВА, ВН.ТЕР.Г. МУНИЦИПАЛЬНЫЙ ОКРУГ ПОКРОВСКОЕ-СТРЕШНЕВО, 
+           УЛ СВОБОДЫ, Д. 17, ПОДВ. ПОМЕЩ. I, КОМ./ОФИС 3/11</p>
+        <p>ОГРН 1227700189496 ИНН 7733382522</p>
+    </div>
+
+    <h2 style="text-align: center; text-transform: uppercase;">ПРЕТЕНЗИЯ</h2>
+
+    <div class="content">
+        <p>От: <span class="field"></span> (ФИО отправителя)</p>
+        <p>Кому: <span class="field"></span> (ФИО/название организации получателя)</p>
+        
+        <p>{{ form.generated_issue.value }}</p>
+ 
+    </div>
+
+    <div class="signature">
+        <p>Генеральный директор</p>
+        <p>ООО «БСК»</p>
+        <p>Балабиков А.М.</p>
+        <p>_________________________</p>
+        <p>(Подпись)</p>
+    </div>
+
+    <div class="date">
+        <p>Дата: {% now "j F Y года" %}</p>
+    </div>
+</body>
+</html>
+

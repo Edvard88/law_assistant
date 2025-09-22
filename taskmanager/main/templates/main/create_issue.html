@@ -1,0 +1,76 @@
+{% extends "main/base.html" %}
+
+
+{% block title %}
+Создать претензию
+{% endblock  %}
+
+{% block content %}
+    <h1>
+        Создать претензию  
+    </h1> 
+        <!-- <form method='post' action="{% url 'reverse' %} " enctype="multipart/form-data"> -->
+        <form method='post' action="{% url 'reverse' %} " enctype="multipart/form-data"> 
+            {% csrf_token %}
+            {{ form.title }}<br>
+            {{ reversed_text }}<br>
+            <!-- {{ form.signature }}<br>  -->
+
+            <button type='submit' class='btn btn-success'>Создать</button>
+            <span>{{error}}</span>
+        </form>
+
+    
+        <div class = "alert alert-warning mt-2">
+            <h3>
+                {{form.fields.items}}<br>
+                {{ reversed_text }}
+            </h3>
+        </div>  
+    
+    {% if show_generated_issue %}
+    <h2>
+        Сгенерированная претензию  
+    </h2> 
+    <!---<form method='post' action="{% url 'generate_pdf' %} " enctype="multipart/form-data"> -->
+    <form method='post' action="{% url 'reverse' %} " enctype="multipart/form-data"> 
+        {% csrf_token %}
+        <p>Перевернутый текст: {{ generated_issue }}</p><br>
+        {{form.generated_issue}}<br>
+        <p>Распишитесь, пожалуйста, чтобы мы могли сорздать pdf файл:<p>
+         <!--- <img src="data:image/png;base64,{{ form.signature }}" alt="Подпись" /> -->
+        <!-- Нужно для подписи -->
+        {{ form.media }}<br>
+         <!--  <label for="{{ form.signature.id_for_label }}">Подпись:</label>
+            {{form.signature}}<br> -->
+        {{form.signature}}
+            
+        <span>{{error}}</span>
+     </form>
+    {% endif %}
+
+    <div id="success-message" style="display: none;">
+    <div class="alert alert-success">
+        Претензия успешно отправлена! Ожидайте ответа.
+    </div>
+</div>
+
+     <!--- Роспись -->
+{% if  form.signature %}
+    <form method='post' action="{% url 'reverse' %} " enctype="multipart/form-data"> 
+        {% csrf_token %}
+        Сгенерированный pdf
+        <button type='submit' class='btn btn-success'>Отправить претензию</button>
+        <span>{{error}}</span>
+     </form>
+    {% endif %}
+
+
+
+    <!---
+    <div class = "alert alert-warning mt-2">
+        <h3>{{form.fields.items}}</h3>
+    </div>  
+    -->
+
+{% endblock  %}
