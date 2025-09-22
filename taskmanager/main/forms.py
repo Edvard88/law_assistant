@@ -1,24 +1,8 @@
-from .models import Task
 from django.forms import ModelForm, TextInput, Textarea, CharField
 from signature_pad import SignaturePadWidget
 
 from .models import LawIssue
 
-class TaskForm(ModelForm):
-    class Meta:
-        model = Task
-        fields = ["title", 'task']
-        widgets = {
-            "title": TextInput(attrs={
-                'class': 'form-control',
-                'placeholder' : 'Введите название'
-            }),
-            "task": Textarea(attrs={
-                'class': 'form-control',
-                'placeholder' : 'Введите  описание'
-
-            })
-        }
 
 class LawIssueForm(ModelForm):
 

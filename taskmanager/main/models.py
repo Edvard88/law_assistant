@@ -2,19 +2,6 @@ from django.db import models
 from signature_pad import SignaturePadField
 
 # Create your models here.
-class Task(models.Model):
-    title = models.CharField('Название')
-    task = models.TextField('Описание')
-
-    def __str__(self):
-        return self.title
-    
-    class Meta:
-        verbose_name = 'Задача'
-        verbose_name_plural = 'Задачи'
-
-
-# Create your models here.
 class LawIssue(models.Model):
     title = models.TextField('Описание')
     signature = SignaturePadField(blank=True, null=True)
