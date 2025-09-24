@@ -99,3 +99,40 @@ def model_predict(user_message):
 
 #   return response.choices[0].message.content
 
+def model_to_whom(user_message):
+   return """ Общество с ограниченной ответственностью 
+«Современные Фонды Недвижимости»
+Генеральном директору Черных Е.В"""
+
+def model_to_whom_address(user_message):
+   return """121059, г. Москва, ул. Киевская, д. 7, корп. 2, этаж 5, ком. 40,41,42"""
+
+def model_to_whom_ogrn(user_message):
+   return """11111111"""
+
+def model_to_whom_inn(user_message):
+   return """22222222"""
+
+def model_to_whom_mail(user_message):
+   return """e-mail:eanikushkina@sfnam.ru"""
+
+def model_to_whom_tel(user_message):
+   return """"""
+
+def model_from_whom(user_message):
+   return """ Индивидуального предпринимателя Гуряевой Э.Г. """
+
+def model_from_whom_address(user_message):
+   return  """125080, г. Москва, Волоколамское ш., д. 15/22 кв. 305"""
+   
+def model_from_whom_ogrn(user_message):
+   return """318774600178018"""
+
+def model_from_whom_inn(user_message):
+   return """501714525062"""
+ 
+def model_from_whom_mail(user_message):
+   return """e-mail: guryavou@mail.ru"""
+
+def model_from_whom_tel(user_message):
+   return """8-903-555-55-55"""

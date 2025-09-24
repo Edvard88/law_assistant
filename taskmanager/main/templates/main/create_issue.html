@@ -33,7 +33,7 @@
         Сгенерированная претензию  
     </h2> 
     <!---<form method='post' action="{% url 'generate_pdf' %} " enctype="multipart/form-data"> -->
-    <form method='post' action="{% url 'reverse' %} " enctype="multipart/form-data"> 
+    <form method='post' action="{% url 'reverse' %} " enctype="multipart/form-data">
         {% csrf_token %}
         <p>Перевернутый текст: {{ generated_issue }}</p><br>
         {{form.generated_issue}}<br>
@@ -49,15 +49,11 @@
      </form>
     {% endif %}
 
-    <div id="success-message" style="display: none;">
-    <div class="alert alert-success">
-        Претензия успешно отправлена! Ожидайте ответа.
-    </div>
-</div>
+ <!--- </div> -->
 
      <!--- Роспись -->
 {% if  form.signature %}
-    <form method='post' action="{% url 'reverse' %} " enctype="multipart/form-data"> 
+    <form method='post' action="{% url 'generate_pdf' %} " enctype="multipart/form-data">  
         {% csrf_token %}
         Сгенерированный pdf
         <button type='submit' class='btn btn-success'>Отправить претензию</button>

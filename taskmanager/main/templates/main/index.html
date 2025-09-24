@@ -1,0 +1,158 @@
+{% extends "main/base.html" %}
+{% block title %}Создать претензию{% endblock %}
+
+{% block content %}
+    <h1>Создать претензию</h1>
+
+    <!-- Индикатор прогресса -->
+    <div class="progress mb-4" style="height: 30px;">
+        <div class="progress-bar 
+            {% if current_step >= 1 %}bg-success{% else %}bg-secondary{% endif %}" 
+            style="width: 25%">Шаг 1</div>
+        <div class="progress-bar 
+            {% if current_step >= 2 %}bg-success{% else %}bg-secondary{% endif %}" 
+            style="width: 25%">Шаг 2</div>
+        <div class="progress-bar 
+            {% if current_step >= 3 %}bg-success{% else %}bg-secondary{% endif %}" 
+            style="width: 25%">Шаг 3</div>
+        <div class="progress-bar 
+            {% if current_step >= 4 %}bg-success{% else %}bg-secondary{% endif %}" 
+            style="width: 25%">Шаг 4</div>
+    </div>
+
+    <!-- Этап 1: Ввод описания проблемы -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h3>Шаг 1: Описание проблемы</h3>
+            <form method='post' action="{% url 'home' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label>Опишите вашу проблему:</label>
+                    {{ form.title }}
+                </div>
+                
+                {% if current_step == 1 %}
+                <button type='submit' class='btn btn-success'>Продолжить</button>
+                {% endif %}
+                
+                <span class="text-danger">{{ error }}</span>
+            </form>
+        </div>
+    </div>
+
+    <!-- Этап 2: Показ сгенерированной претензии -->
+    {% if show_generated_issue %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <h3>Шаг 2: Проверка текста претензии</h3>
+            
+            <form method='post' action="{% url 'home' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <!-- Скрытые поля для сохранения данных между шагами -->
+                <input type="hidden" name="title" value="{{ form.title.value }}">
+                {% if form.generated_issue.value %}
+                <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
+                {% endif %}
+                
+                
+                <div class="form-group">
+                    <label>Текст претензии:</label>
+                    
+                    {% comment %} <div class="alert alert-light border p-3">
+                        <p style="white-space: pre-wrap;">{{ form.generated_issue }}</p>
+                    </div> {% endcomment %}
+                    
+                    {% comment %} {{ form.generated_issue }} {% endcomment %}
+                </div>
+               
+
+                {% if current_step == 2 %}
+                <button type='submit' name='confirm_text' class='btn btn-primary'>Подтвердить текст</button>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Этап 3: Подпись -->
+    {% if show_signature %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <h3>Шаг 3: Подпись</h3>
+            <form method='post' action="{% url 'home' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <!-- Скрытые поля -->
+                <input type="hidden" name="title" value="{{ form.title.value }}">
+                <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
+                
+                <div class="form-group">
+                    <label>Поставьте вашу подпись:</label>
+                    {{ form.media }}
+                    {{ form.signature }}
+                </div>
+                
+                {% if current_step == 3 %}
+                <button type='submit' name='save_signature' class='btn btn-primary'>Сохранить подпись</button>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Этап 4: Генерация PDF -->
+    {% if current_step == 4 %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <h3>Шаг 4: Завершение</h3>
+            
+            <div class="alert alert-success">
+                <h4>Все данные готовы!</h4>
+                <p>Теперь вы можете сгенерировать PDF файл с вашей претензией.</p>
+            </div>
+            
+
+            <!-- Превью PDF -->
+            <div class="mb-4">
+                <h5>Предварительный просмотр PDF:</h5>
+                {% include "main/pdf_template.html" with generated_issue_text=form.generated_issue.value current_date=current_date %}
+                <small class="text-muted">Это предварительный просмотр того, как будет выглядеть PDF документ</small>
+            </div>
+
+            <form method='post' action="{% url 'generate_pdf' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <!-- Передаем все данные в форму генерации PDF -->
+                <input type="hidden" name="title" value="{{ form.title.value }}">
+                <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
+                <input type="hidden" name="signature" value="{{ form.signature.value }}">
+                
+                <button type='submit' class='btn btn-success'>Сгенерировать и скачать PDF</button>
+            </form>
+            
+            <!-- Альтернативно: остаться на этой же странице с дополнительной логикой -->
+            <form method='post' action="{% url 'home' %}" class="mt-2">
+                {% csrf_token %}
+                <input type="hidden" name="title" value="{{ form.title.value }}">
+                <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
+                <input type="hidden" name="signature" value="{{ form.signature.value }}">
+                <button type='submit' name='restart' class='btn btn-secondary'>Создать новую претензию</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Отладочная информация -->
+    {% if debug %}
+    <div class="card mt-4">
+        <div class="card-body">
+            <h5>Отладочная информация:</h5>
+            <p>Текущий шаг: {{ current_step }}</p>
+            <p>show_generated_issue: {{ show_generated_issue }}</p>
+            <p>show_signature: {{ show_signature }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+{% endblock %}

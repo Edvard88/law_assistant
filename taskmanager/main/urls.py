@@ -3,7 +3,8 @@ from . import views
 
 
 urlpatterns = [
-    path('', views.create_issue, name = 'home'),
+    #path('', views.create_issue, name = 'home'),
+    path('', views.index, name = 'home'),
     path('about', views.about, name = 'about'),
     #path('create_issue', views.create_issue, name = 'create_issue'), 
     path("reverse", views.reverse_view, name="reverse"),

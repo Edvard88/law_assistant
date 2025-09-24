@@ -6,30 +6,6 @@ from .models import LawIssue
 
 class LawIssueForm(ModelForm):
 
-    # signature = CharField(
-    #     widget=SignaturePadWidget(attrs={
-    #         'width': 500,
-    #         'height': 200,
-    #         'pen_color': 'blue',
-    #         'background_color': 'lightgray',
-    #         'clear_button': True,
-    #         'save_format': 'image/png',
-    #     })
-    # )
-
-    # custom_signature = CharField(
-    #     widget=SignaturePadWidget(attrs={
-    #         'width': 500,
-    #         'height': 200,
-    #         'pen_color': 'blue',
-    #         'background_color': 'lightgray',
-    #         'clear_button': True,
-    #         'save_format': 'image/png',
-
-    #     }),
-    #     required=False
-    # )
-
     class Meta:
         model = LawIssue
         fields = ["title", "signature", "generated_issue"] 
