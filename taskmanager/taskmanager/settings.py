@@ -41,6 +41,8 @@ INSTALLED_APPS = [
     # My apps
     'main',
     'signature_pad',
+    'ckeditor',
+    #'ckeditor_uploader',  # если нужна загрузка файлов
 ]
 
 MIDDLEWARE = [
@@ -129,3 +131,17 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 import os
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_DIRS = [BASE_DIR / 'static']  # или путь к папке со статикой в вашем проекте
+
+#Тоже я добавил для CKEditor
+
+# Настройки CKEditor
+CKEDITOR_CONFIGS = {
+    'default': {
+        'toolbar': 'full',
+        'height': 300,
+        'width': '100%',
+        'allowedContent': True,  # разрешить HTML контент
+    },
+}
+
+CKEDITOR_BASEPATH = "/static/ckeditor/ckeditor/"

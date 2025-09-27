@@ -22,6 +22,9 @@ from xhtml2pdf import pisa
 def about(request):
     return render(request, 'main/about.html')
 
+def get_signature():
+    pass
+
 def generate_issue_text(claim_text):
     generated_issue = model_predict(claim_text)
     return generated_issue
@@ -53,8 +56,7 @@ def generate_issue_text_v2(claim_text):
     return full_claim_html
 
 
-def get_signature():
-    pass
+
 
 def index(request):
     # Обработка GET запроса - показываем пустую форму

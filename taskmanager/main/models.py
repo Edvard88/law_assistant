@@ -1,5 +1,6 @@
 from django.db import models
 from signature_pad import SignaturePadField
+from ckeditor.fields import RichTextField
 
 
 # def user_pdf_path(instance, filename):
@@ -11,10 +12,13 @@ class LawIssue(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
 
     title = models.TextField('Описание')  #!!!!! Переимновать
-    generated_issue = models.TextField('Сгенерированная претензия', 
+    generated_issue = RichTextField('Сгенерированная претензия', 
                                        default= "Неизвестно", 
                                        blank=True, 
                                        null=True)
+    
+    
+    #RichTextField(blank=True, null=True) 
     
     signature = SignaturePadField(blank=True, null=True)
 

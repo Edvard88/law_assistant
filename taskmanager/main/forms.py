@@ -1,5 +1,6 @@
 from django.forms import ModelForm, TextInput, Textarea, CharField
 from signature_pad import SignaturePadWidget
+from ckeditor.widgets import CKEditorWidget
 
 from .models import LawIssue
 
@@ -15,7 +16,7 @@ class LawIssueForm(ModelForm):
                 'placeholder' : """Напишите на обычном языке вышу претензию указав ваше ФИО, а также ФИО к кому претензаия или название компании.\n Мы сгенерим корректный текст претензии"""
 
             }),
-            "generated_issue": TextInput(attrs={
+            "generated_issue": CKEditorWidget(config_name='default', attrs={
                 'class': 'form-control',
             }),
 
