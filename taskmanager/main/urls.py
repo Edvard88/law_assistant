@@ -6,8 +6,7 @@ urlpatterns = [
     #path('', views.create_issue, name = 'home'),
     path('', views.index, name = 'home'),
     path('about', views.about, name = 'about'),
-    #path('create_issue', views.create_issue, name = 'create_issue'), 
-    path("reverse", views.reverse_view, name="reverse"),
-    path('generate_pdf', views.generate_pdf_xhtml2pdf, name='generate_pdf'),
+    path('generate-pdf/', views.generate_pdf_xhtml2pdf, name='generate_pdf'),
+    path('send-pdf-email/', views.send_pdf_email, name='send_pdf_email'),
 ]
 

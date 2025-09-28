@@ -112,7 +112,7 @@
     </div>
     {% endif %}
 
-<!-- Этап 4: Генерация PDF -->
+<!-- Этап 4: Завершение -->
 {% if current_step == 4 %}
 <div class="card mb-4">
     <div class="card-body">
@@ -127,31 +127,89 @@
         <div class="mb-4">
             <h5>Предварительный просмотр PDF:</h5>
             <div class="border p-4 bg-light">
-                <!-- Вместо include используем прямой рендеринг с безопасным отображением HTML -->
                 {{ form.generated_issue.value|safe }}
             </div>
             <small class="text-muted">Это предварительный просмотр того, как будет выглядеть PDF документ</small>
         </div>
 
-        <form method='post' action="{% url 'generate_pdf' %}" enctype="multipart/form-data">
-            {% csrf_token %}
-            
-            <!-- Передаем все данные в форму генерации PDF -->
-            <input type="hidden" name="title" value="{{ form.title.value }}">
-            <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
-            <input type="hidden" name="signature" value="{{ form.signature.value }}">
-            
-            <button type='submit' class='btn btn-success'>Сгенерировать и скачать PDF</button>
-        </form>
-        
-        <!-- Альтернативно: остаться на этой же странице с дополнительной логикой -->
-        <form method='post' action="{% url 'home' %}" class="mt-2">
-            {% csrf_token %}
-            <input type="hidden" name="title" value="{{ form.title.value }}">
-            <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
-            <input type="hidden" name="signature" value="{{ form.signature.value }}">
-            <button type='submit' name='restart' class='btn btn-secondary'>Создать новую претензию</button>
-        </form>
+        <!-- Кнопки действий -->
+        <div class="d-flex gap-2 flex-wrap">
+            <form method='post' action="{% url 'generate_pdf' %}" enctype="multipart/form-data" class="mb-2">
+                {% csrf_token %}
+                <input type="hidden" name="title" value="{{ form.title.value }}">
+                <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
+                <input type="hidden" name="signature" value="{{ form.signature.value }}">
+                <button type='submit' class='btn btn-success'>Сгенерировать и скачать PDF</button>
+            </form>
+
+            <!-- Кнопка для открытия модального окна отправки на почту -->
+            <button type="button" class="btn btn-primary mb-2" data-bs-toggle="modal" data-bs-target="#emailModal">
+                Отправить PDF на почту
+            </button>
+
+            <form method='post' action="{% url 'home' %}" class="mb-2">
+                {% csrf_token %}
+                <input type="hidden" name="title" value="{{ form.title.value }}">
+                <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
+                <input type="hidden" name="signature" value="{{ form.signature.value }}">
+                <button type='submit' name='restart' class='btn btn-secondary'>Создать новую претензию</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для ввода email -->
+<div class="modal fade" id="emailModal" tabindex="-1" aria-labelledby="emailModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'send_pdf_email' %}" id="emailForm">
+                {% csrf_token %}
+                <input type="hidden" name="title" value="{{ form.title.value }}">
+                <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
+                <input type="hidden" name="signature" value="{{ form.signature.value }}">
+                
+                <div class="modal-header">
+                    <h5 class="modal-title" id="emailModalLabel">Отправка PDF на почту</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="user_email" class="form-label">Ваш email адрес:</label>
+                        <input type="email" class="form-control" id="user_email" name="user_email" required 
+                               placeholder="example@mail.ru">
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="user_agreement" name="user_agreement" required>
+                        <label class="form-check-label" for="user_agreement">
+                            Я согласен с <a href="#" data-bs-toggle="modal" data-bs-target="#agreementModal">пользовательским соглашением</a>
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Отправить на почту</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно пользовательского соглашения -->
+<div class="modal fade" id="agreementModal" tabindex="-1" aria-labelledby="agreementModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="agreementModalLabel">Пользовательское соглашение</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Здесь будет содержание пользовательского соглашения -->
+                <p>Текст пользовательского соглашения будет отображен здесь...</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
     </div>
 </div>
 {% endif %}
