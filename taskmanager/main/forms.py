@@ -16,8 +16,10 @@ class LawIssueForm(ModelForm):
                 'placeholder' : """Напишите на обычном языке вышу претензию указав ваше ФИО, а также ФИО к кому претензаия или название компании.\n Мы сгенерим корректный текст претензии"""
 
             }),
-            "generated_issue": CKEditorWidget(config_name='default', attrs={
+            "generated_issue": CKEditorWidget(attrs={
                 'class': 'form-control',
+                'style': 'width: 100%; height: 1000;'
+                
             }),
 
             "signature": SignaturePadWidget(attrs={

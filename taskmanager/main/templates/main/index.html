@@ -67,13 +67,14 @@
                 
                 
                 <div class="form-group">
-                    <label>Текст претензии:</label>
+                    <label>Проверьте текст претензии, если что внесите изменения:</label>
                     
                     <div class="alert alert-light border p-3">
                         <p style="white-space: pre-wrap;">{{ form.generated_issue }}</p>
                     </div> 
                     
                     {% comment %} {{ form.generated_issue }} {% endcomment %}
+                    {{ form.media }}
                 </div>
                
 
@@ -98,7 +99,7 @@
                 <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
                 
                 <div class="form-group">
-                    <label>Поставьте вашу подпись:</label>
+                    <label>Поставьте вашу подпись, чтобы мы смогли сформировать финальный вариант претензии</label>
                     {{ form.media }}
                     {{ form.signature }}
                 </div>

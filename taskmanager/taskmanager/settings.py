@@ -137,11 +137,39 @@ STATICFILES_DIRS = [BASE_DIR / 'static']  # или путь к папке со �
 # Настройки CKEditor
 CKEDITOR_CONFIGS = {
     'default': {
-        'toolbar': 'full',
-        'height': 300,
+        'toolbar_Custom': [
+            ['Bold', 'Italic', 'Underline', 'FontSize'],
+        ],
+        'height': 1000,
         'width': '100%',
         'allowedContent': True,  # разрешить HTML контент
+        'removePlugins': 'stylesheetparser',
+        #'removeButtons': '',
+        'extraAllowedContent': '*{*}',
+        'fontSize_sizes': '10/10px;12/12px;14/14px;16/16px;18/18px;20/20px;24/24px',
     },
 }
 
 CKEDITOR_BASEPATH = "/static/ckeditor/ckeditor/"
+
+# CKEDITOR_CONFIGS = {
+#     'default': {
+#         'toolbar': 'Custom',
+#         'toolbar_Custom': [
+#             ['Bold', 'Italic', 'Underline'],
+#             ['FontSize']
+#         ],
+#         'height': 1000,
+#         'width': '100%',
+#         'allowedContent': True,
+#         'removePlugins': 'stylesheetparser',  # Убрали elementspath
+#         'extraAllowedContent': '*{*}',
+#         'fontSize_sizes': '10/10px;12/12px;14/14px;16/16px;18/18px;20/20px;24/24px',
+#         'removeButtons': '',
+#         # Добавьте эти настройки для максимальной ширины:
+#         'resize_enabled': False,  # Отключаем изменение размера
+#         'autoGrow_onStartup': True,  # Автоматически расширяется при загрузке
+#         'autoGrow_minHeight': 1000,  # Минимальная высота
+#         'autoGrow_maxHeight': 2000,  # Максимальная высота
+#     },
+# }
