@@ -79,7 +79,7 @@
                
 
                 {% if current_step == 2 %}
-                <button type='submit' name='confirm_text' class='btn btn-primary'>Подтвердить текст</button>
+                <button type='submit' name='confirm_text' class='btn btn-primary'>Подтвердить текст и расписаться</button>
                 {% endif %}
             </form>
         </div>
@@ -112,47 +112,49 @@
     </div>
     {% endif %}
 
-    <!-- Этап 4: Генерация PDF -->
-    {% if current_step == 4 %}
-    <div class="card mb-4">
-        <div class="card-body">
-            <h3>Шаг 4: Завершение</h3>
-            
-            <div class="alert alert-success">
-                <h4>Все данные готовы!</h4>
-                <p>Теперь вы можете сгенерировать PDF файл с вашей претензией.</p>
-            </div>
-            
-
-            <!-- Превью PDF -->
-            <div class="mb-4">
-                <h5>Предварительный просмотр PDF:</h5>
-                {% include "main/pdf_template.html" with generated_issue_text=form.generated_issue.value current_date=current_date %}
-                <small class="text-muted">Это предварительный просмотр того, как будет выглядеть PDF документ</small>
-            </div>
-
-            <form method='post' action="{% url 'generate_pdf' %}" enctype="multipart/form-data">
-                {% csrf_token %}
-                
-                <!-- Передаем все данные в форму генерации PDF -->
-                <input type="hidden" name="title" value="{{ form.title.value }}">
-                <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
-                <input type="hidden" name="signature" value="{{ form.signature.value }}">
-                
-                <button type='submit' class='btn btn-success'>Сгенерировать и скачать PDF</button>
-            </form>
-            
-            <!-- Альтернативно: остаться на этой же странице с дополнительной логикой -->
-            <form method='post' action="{% url 'home' %}" class="mt-2">
-                {% csrf_token %}
-                <input type="hidden" name="title" value="{{ form.title.value }}">
-                <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
-                <input type="hidden" name="signature" value="{{ form.signature.value }}">
-                <button type='submit' name='restart' class='btn btn-secondary'>Создать новую претензию</button>
-            </form>
+<!-- Этап 4: Генерация PDF -->
+{% if current_step == 4 %}
+<div class="card mb-4">
+    <div class="card-body">
+        <h3>Шаг 4: Завершение</h3>
+        
+        <div class="alert alert-success">
+            <h4>Все данные готовы!</h4>
+            <p>Теперь вы можете сгенерировать PDF файл с вашей претензией.</p>
         </div>
+
+        <!-- Превью PDF -->
+        <div class="mb-4">
+            <h5>Предварительный просмотр PDF:</h5>
+            <div class="border p-4 bg-light">
+                <!-- Вместо include используем прямой рендеринг с безопасным отображением HTML -->
+                {{ form.generated_issue.value|safe }}
+            </div>
+            <small class="text-muted">Это предварительный просмотр того, как будет выглядеть PDF документ</small>
+        </div>
+
+        <form method='post' action="{% url 'generate_pdf' %}" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <!-- Передаем все данные в форму генерации PDF -->
+            <input type="hidden" name="title" value="{{ form.title.value }}">
+            <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
+            <input type="hidden" name="signature" value="{{ form.signature.value }}">
+            
+            <button type='submit' class='btn btn-success'>Сгенерировать и скачать PDF</button>
+        </form>
+        
+        <!-- Альтернативно: остаться на этой же странице с дополнительной логикой -->
+        <form method='post' action="{% url 'home' %}" class="mt-2">
+            {% csrf_token %}
+            <input type="hidden" name="title" value="{{ form.title.value }}">
+            <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
+            <input type="hidden" name="signature" value="{{ form.signature.value }}">
+            <button type='submit' name='restart' class='btn btn-secondary'>Создать новую претензию</button>
+        </form>
     </div>
-    {% endif %}
+</div>
+{% endif %}
 
     <!-- Отладочная информация -->
     {% if debug %}
