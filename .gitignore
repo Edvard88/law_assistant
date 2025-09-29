@@ -242,3 +242,4 @@ Thumbs.db
 
 db.sqlite3
 *__pycache__/*
+*pdf*
