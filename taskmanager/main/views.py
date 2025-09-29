@@ -1,4 +1,13 @@
 from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect
+from django.core.mail import EmailMessage
+from django.http import HttpResponse
+from django.template.loader import render_to_string, get_template
+from django.conf import settings
+from xhtml2pdf import pisa
+import io
+import os
+from datetime import datetime
 
 # Create your views here.
 from .models import LawIssue
@@ -15,7 +24,6 @@ from django.template.loader import get_template
 from xhtml2pdf import pisa
 
 
-
 # def index(request):
 #     return render(request, 'main/index.html')
 
@@ -24,6 +32,21 @@ def about(request):
 
 def get_signature():
     pass
+
+def ensure_directory_exists(directory_path):
+    """Создает директорию, если она не существует"""
+    if not os.path.exists(directory_path):
+        os.makedirs(directory_path)
+
+def save_pdf_to_file(pdf_content, file_path):
+    """Сохраняет PDF контент в файл"""
+    try:
+        with open(file_path, 'wb') as f:
+            f.write(pdf_content.getvalue())
+        return True
+    except Exception as e:
+        print(f"Ошибка сохранения PDF: {str(e)}")
+        return False
 
 
 def generate_issue_text_v2(claim_text):
@@ -131,11 +154,19 @@ def index(request):
 
 
 def generate_pdf_from_html(html_content):
-    """Генерирует PDF из HTML контента"""
+    """Генерирует PDF из HTML контента с правильной кодировкой"""
     pdf_file = io.BytesIO()
-    pisa_status = pisa.CreatePDF(html_content, dest=pdf_file)
+    
+    # Настройки для правильного отображения кириллицы
+    pisa_status = pisa.CreatePDF(
+        html_content, 
+        dest=pdf_file,
+        encoding='utf-8',
+        link_callback=None
+    )
     
     if pisa_status.err:
+        print(f"Ошибка генерации PDF: {pisa_status.err}")
         return None
     
     pdf_file.seek(0)
@@ -169,7 +200,7 @@ def generate_agreement_pdf_context(claim_text):
     }
 
 def send_pdf_email(request):
-    """Отправляет PDF файлы на email"""
+    """Отправляет PDF файлы на email и сохраняет их в папки проекта"""
     if request.method == 'POST':
         user_email = request.POST.get('user_email')
         user_agreement = request.POST.get('user_agreement')
@@ -194,6 +225,35 @@ def send_pdf_email(request):
             if not claim_pdf or not agreement_pdf:
                 return HttpResponse('Ошибка генерации PDF')
             
+            # Сохраняем PDF файлы в папки проекта
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # Пути для сохранения
+            claim_directory = "data/generated_issue_pdf"
+            agreement_directory = "data/generated_user_agreement"
+            
+            # Создаем директории, если они не существуют
+            ensure_directory_exists(claim_directory)
+            ensure_directory_exists(agreement_directory)
+            
+            # Имена файлов
+            claim_filename = f"претензия_{timestamp}.pdf"
+            agreement_filename = f"пользовательское_соглашение_{timestamp}.pdf"
+            
+            claim_filepath = os.path.join(claim_directory, claim_filename)
+            agreement_filepath = os.path.join(agreement_directory, agreement_filename)
+            
+            # Сохраняем файлы
+            claim_saved = save_pdf_to_file(claim_pdf, claim_filepath)
+            agreement_saved = save_pdf_to_file(agreement_pdf, agreement_filepath)
+            
+            if not claim_saved or not agreement_saved:
+                return HttpResponse('Ошибка сохранения PDF файлов')
+            
+            # Сбрасываем позицию в файлах для отправки по email
+            claim_pdf.seek(0)
+            agreement_pdf.seek(0)
+            
             # Создаем email
             subject = 'Ваша претензия - AI Law Assistant'
             body = f"""
@@ -202,6 +262,8 @@ def send_pdf_email(request):
             Во вложении вы найдете:
             1. Сгенерированную претензию
             2. Пользовательское соглашение
+            
+            Файлы также сохранены в нашей системе.
             
             С уважением,
             AI Law Assistant
@@ -222,16 +284,29 @@ def send_pdf_email(request):
             # Отправляем email
             email.send()
             
-            # Сохраняем в модель (опционально)
+            # Сохраняем в модель LawIssue
             law_issue = LawIssue.objects.create(
                 title=title,
                 generated_issue=generated_issue,
                 signature=signature
             )
-            law_issue.user_agreement.save('user_agreement.pdf', agreement_pdf)
-            law_issue.generated_claim_pdf.save('claim.pdf', claim_pdf)
             
-            return HttpResponse('PDF успешно отправлен на вашу почту!')
+            # Сохраняем файлы в модель
+            with open(claim_filepath, 'rb') as claim_file:
+                law_issue.generated_claim_pdf.save(claim_filename, claim_file)
+            
+            with open(agreement_filepath, 'rb') as agreement_file:
+                law_issue.user_agreement.save(agreement_filename, agreement_file)
+            
+            success_message = f"""
+            PDF успешно отправлен на вашу почту {user_email}!
+            
+            Файлы также сохранены:
+            - Претензия: {claim_filepath}
+            - Пользовательское соглашение: {agreement_filepath}
+            """
+            
+            return HttpResponse(success_message)
             
         except Exception as e:
             return HttpResponse(f'Ошибка отправки: {str(e)}')
@@ -239,7 +314,7 @@ def send_pdf_email(request):
     return redirect('home')
 
 def generate_pdf_xhtml2pdf(request):
-    """Генерирует PDF для скачивания"""
+    """Генерирует PDF для скачивания и сохраняет в папку"""
     if request.method == 'POST':
         title = request.POST.get('title')
         generated_issue = request.POST.get('generated_issue')
@@ -247,13 +322,94 @@ def generate_pdf_xhtml2pdf(request):
         context = generate_claim_pdf_context(title, generated_issue)
         html = render_to_string('main/pdf_template.html', context)
         
-        response = HttpResponse(content_type='application/pdf')
-        response['Content-Disposition'] = 'attachment; filename="претензия.pdf"'
+        # Генерируем PDF
+        pdf_file = generate_pdf_from_html(html)
         
-        pisa_status = pisa.CreatePDF(html, dest=response)
-        
-        if pisa_status.err:
+        if not pdf_file:
             return HttpResponse('Ошибка генерации PDF')
+        
+        # Сохраняем PDF в папку
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        claim_directory = "data/generated_issue_pdf"
+        ensure_directory_exists(claim_directory)
+        
+        claim_filename = f"претензия_{timestamp}.pdf"
+        claim_filepath = os.path.join(claim_directory, claim_filename)
+        
+        if save_pdf_to_file(pdf_file, claim_filepath):
+            print(f"PDF сохранен: {claim_filepath}")
+        
+        # Сбрасываем позицию для отдачи пользователю
+        pdf_file.seek(0)
+        
+        response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{claim_filename}"'
+        
         return response
+    
+    return redirect('home')
+
+
+def download_pdf_only(request):
+    """Только сохраняет PDF в папку без отправки на email"""
+    if request.method == 'POST':
+        title = request.POST.get('title')
+        generated_issue = request.POST.get('generated_issue')
+        
+        # Генерируем PDF претензии
+        claim_context = generate_claim_pdf_context(title, generated_issue)
+        claim_html = render_to_string('main/pdf_template.html', claim_context)
+        claim_pdf = generate_pdf_from_html(claim_html)
+        
+        # Генерируем PDF пользовательского соглашения
+        agreement_context = generate_agreement_pdf_context(title)
+        agreement_html = render_to_string('main/user_agreement.html', agreement_context)
+        agreement_pdf = generate_pdf_from_html(agreement_html)
+        
+        if not claim_pdf or not agreement_pdf:
+            return HttpResponse('Ошибка генерации PDF')
+        
+        # Сохраняем PDF файлы в папки проекта
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        claim_directory = "data/generated_issue_pdf"
+        agreement_directory = "data/generated_user_agreement"
+        
+        ensure_directory_exists(claim_directory)
+        ensure_directory_exists(agreement_directory)
+        
+        claim_filename = f"претензия_{timestamp}.pdf"
+        agreement_filename = f"пользовательское_соглашение_{timestamp}.pdf"
+        
+        claim_filepath = os.path.join(claim_directory, claim_filename)
+        agreement_filepath = os.path.join(agreement_directory, agreement_filename)
+        
+        # Сохраняем файлы
+        claim_saved = save_pdf_to_file(claim_pdf, claim_filepath)
+        agreement_saved = save_pdf_to_file(agreement_pdf, agreement_filepath)
+        
+        if claim_saved and agreement_saved:
+            # Сбрасываем позицию для отдачи пользователю
+            claim_pdf.seek(0)
+            
+            response = HttpResponse(claim_pdf.read(), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="{claim_filename}"'
+            
+            # Сохраняем в модель
+            law_issue = LawIssue.objects.create(
+                title=title,
+                generated_issue=generated_issue,
+                signature=request.POST.get('signature', '')
+            )
+            
+            with open(claim_filepath, 'rb') as claim_file:
+                law_issue.generated_claim_pdf.save(claim_filename, claim_file)
+            
+            with open(agreement_filepath, 'rb') as agreement_file:
+                law_issue.user_agreement.save(agreement_filename, agreement_file)
+            
+            return response
+        else:
+            return HttpResponse('Ошибка сохранения PDF файлов')
     
     return redirect('home')

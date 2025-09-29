@@ -3,9 +3,13 @@ from signature_pad import SignaturePadField
 from ckeditor.fields import RichTextField
 
 
-# def user_pdf_path(instance, filename):
-#     # instance - объект модели, должен иметь связь с User
-#     return f'users/{instance.user.username}/pdfs/{filename}'
+def generated_issue_pdf_path(instance, filename):
+    """Путь для сохранения сгенерированных претензий"""
+    return f'data/generated_issue_pdf/{filename}'
+
+def user_agreement_pdf_path(instance, filename):
+    """Путь для сохранения пользовательских соглашений"""
+    return f'data/generated_user_agreement/{filename}'
 
 # Create your models here.
 class LawIssue(models.Model):
@@ -23,11 +27,11 @@ class LawIssue(models.Model):
     signature = SignaturePadField(blank=True, null=True)
 
     generated_claim_pdf = models.FileField(verbose_name = "Cгенерированный pdf претензии", 
-                                           upload_to="data/generated_issue_pdf/",
+                                           upload_to=generated_issue_pdf_path,
                                            blank=True)
     
     user_agreement = models.FileField(verbose_name = "Пользовательское соглашение", 
-                                      upload_to="data/generated_user_agreement/",
+                                      upload_to=user_agreement_pdf_path,
                                       blank=True)
     #user_mail = models.CharField("Mail пользвователя")
      

@@ -173,3 +173,22 @@ CKEDITOR_BASEPATH = "/static/ckeditor/ckeditor/"
 #         'autoGrow_maxHeight': 2000,  # Максимальная высота
 #     },
 # }
+
+# Настройки email
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.mail.ru'
+EMAIL_PORT = 25
+EMAIL_USE_TLS = True
+#EMAIL_USE_SSL = False
+EMAIL_HOST_USER = ''
+EMAIL_HOST_PASSWORD = ''
+DEFAULT_FROM_EMAIL = ''
+
+# Отключить проверку SSL сертификата
+EMAIL_SSL_CERTFILE = None
+EMAIL_SSL_KEYFILE = None
+EMAIL_SSL_CERT_REQS = None  # Отключаем проверку сертификата
+
+# Дополнительные настройки для обхода SSL
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
