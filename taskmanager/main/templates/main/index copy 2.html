@@ -1,0 +1,229 @@
+{% extends "main/base.html" %}
+{% load static %}
+{% block title %}Создать претензию{% endblock %}
+
+
+{% block extra_head %}
+<!-- Подключаем CKEditor -->
+{% comment %} <script src="{% static 'ckeditor/ckeditor/ckeditor.js' %}"></script> {% endcomment %}
+{% comment %} <script src="https://cdn.ckeditor.com/4.16.2/standard/ckeditor.js"></script> {% endcomment %}
+{{ form.media }}  <!-- Это важно для загрузки CKEditor -->
+{% endblock %}
+
+{% block content %}
+    <h1>Создать претензию</h1>
+
+    <!-- Индикатор прогресса -->
+    <div class="progress mb-4" style="height: 30px;">
+        <div class="progress-bar 
+            {% if current_step >= 1 %}bg-success{% else %}bg-secondary{% endif %}" 
+            style="width: 25%">Шаг 1</div>
+        <div class="progress-bar 
+            {% if current_step >= 2 %}bg-success{% else %}bg-secondary{% endif %}" 
+            style="width: 25%">Шаг 2</div>
+        <div class="progress-bar 
+            {% if current_step >= 3 %}bg-success{% else %}bg-secondary{% endif %}" 
+            style="width: 25%">Шаг 3</div>
+        <div class="progress-bar 
+            {% if current_step >= 4 %}bg-success{% else %}bg-secondary{% endif %}" 
+            style="width: 25%">Шаг 4</div>
+    </div>
+
+    <!-- Этап 1: Ввод описания проблемы -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h3>Шаг 1: Описание проблемы</h3>
+            <form method='post' action="{% url 'home' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label>Опишите вашу проблему:</label>
+                    {{ form.title }}
+                </div>
+                
+                {% if current_step == 1 %}
+                <button type='submit' class='btn btn-success'>Продолжить</button>
+                {% endif %}
+                
+                <span class="text-danger">{{ error }}</span>
+            </form>
+        </div>
+    </div>
+
+    <!-- Этап 2: Показ сгенерированной претензии -->
+    {% if show_generated_issue %}
+    {% comment %} <script>window.CKEDITOR_BASEPATH = '/static/ckeditor/ckeditor/';</script> {% endcomment %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <h3>Шаг 2: Проверка текста претензии</h3>
+            
+            <form method='post' action="{% url 'home' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <!-- Скрытые поля для сохранения данных между шагами -->
+                <input type="hidden" name="title" value="{{ form.title.value }}">
+                {% if form.generated_issue.value %}
+                {% comment %} <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}"> {% endcomment %}
+                {% endif %}
+                
+                
+                <div class="form-group">
+                    <label>Проверьте текст претензии, если что внесите изменения:</label>
+                    
+                    <div class="alert alert-light border p-3">
+                        <p style="white-space: pre-wrap;">{{ form.generated_issue }}</p>
+                    </div> 
+                    
+                    {% comment %} {{ form.generated_issue }} {% endcomment %}
+                    {{ form.media }}
+                </div>
+               
+
+                {% if current_step == 2 %}
+                <button type='submit' name='confirm_text' class='btn btn-primary'>Подтвердить текст и расписаться</button>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Этап 3: Подпись -->
+    {% if show_signature %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <h3>Шаг 3: Подпись</h3>
+            <form method='post' action="{% url 'home' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <!-- Скрытые поля -->
+                <input type="hidden" name="title" value="{{ form.title.value }}">
+                <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
+                
+                <div class="form-group">
+                    <label>Поставьте вашу подпись, чтобы мы смогли сформировать финальный вариант претензии</label>
+                    {{ form.media }}
+                    {{ form.signature }}
+                </div>
+                
+                {% if current_step == 3 %}
+                <button type='submit' name='save_signature' class='btn btn-primary'>Сохранить подпись</button>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+<!-- Этап 4: Завершение -->
+{% if current_step == 4 %}
+<div class="card mb-4">
+    <div class="card-body">
+        <h3>Шаг 4: Завершение</h3>
+        
+        <div class="alert alert-success">
+            <h4>Все данные готовы!</h4>
+            <p>Теперь вы можете сгенерировать PDF файл с вашей претензией.</p>
+        </div>
+
+        <!-- Превью PDF -->
+        <div class="mb-4">
+            <h5>Предварительный просмотр PDF:</h5>
+            <div class="border p-4 bg-light">
+                {{ form.generated_issue.value|safe }}
+            </div>
+            <small class="text-muted">Это предварительный просмотр того, как будет выглядеть PDF документ</small>
+        </div>
+
+        <!-- Кнопки действий -->
+        <div class="d-flex gap-2 flex-wrap">
+            <form method='post' action="{% url 'download_pdf' %}" enctype="multipart/form-data" class="mb-2">
+                {% csrf_token %}
+                <input type="hidden" name="title" value="{{ form.title.value }}">
+                <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
+                <input type="hidden" name="signature" value="{{ form.signature.value }}">
+                <button type='submit' class='btn btn-success'>Сгенерировать и скачать PDF</button>
+            </form>
+
+            <!-- Кнопка для открытия модального окна отправки на почту -->
+            <button type="button" class="btn btn-primary mb-2" data-bs-toggle="modal" data-bs-target="#emailModal">
+                Отправить PDF на почту
+            </button>
+
+            <form method='post' action="{% url 'home' %}" class="mb-2">
+                {% csrf_token %}
+                <input type="hidden" name="title" value="{{ form.title.value }}">
+                <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
+                <input type="hidden" name="signature" value="{{ form.signature.value }}">
+                <button type='submit' name='restart' class='btn btn-secondary'>Создать новую претензию</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для ввода email -->
+<div class="modal fade" id="emailModal" tabindex="-1" aria-labelledby="emailModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'send_pdf_email' %}" id="emailForm">
+                {% csrf_token %}
+                <input type="hidden" name="title" value="{{ form.title.value }}">
+                <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
+                <input type="hidden" name="signature" value="{{ form.signature.value }}">
+                
+                <div class="modal-header">
+                    <h5 class="modal-title" id="emailModalLabel">Отправка PDF на почту</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="user_email" class="form-label">Ваш email адрес:</label>
+                        <input type="email" class="form-control" id="user_email" name="user_email" required 
+                               placeholder="example@mail.ru">
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="user_agreement" name="user_agreement" required>
+                        <label class="form-check-label" for="user_agreement">
+                            Я согласен с <a href="#" data-bs-toggle="modal" data-bs-target="#agreementModal">пользовательским соглашением</a>
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Отправить на почту</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно пользовательского соглашения -->
+<div class="modal fade" id="agreementModal" tabindex="-1" aria-labelledby="agreementModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="agreementModalLabel">Пользовательское соглашение</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Здесь будет содержание пользовательского соглашения -->
+                <p>Текст пользовательского соглашения будет отображен здесь...</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+    <!-- Отладочная информация -->
+    {% if debug %}
+    <div class="card mt-4">
+        <div class="card-body">
+            <h5>Отладочная информация:</h5>
+            <p>Текущий шаг: {{ current_step }}</p>
+            <p>show_generated_issue: {{ show_generated_issue }}</p>
+            <p>show_signature: {{ show_signature }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+{% endblock %}

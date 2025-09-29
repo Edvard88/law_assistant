@@ -85,7 +85,7 @@ def index(request):
             'form': form,
             'show_generated_issue': False,
             'show_signature': False,
-            'current_step': 1  # Добавляем отслеживание текущего шага
+            'current_step': 1
         }
         return render(request, "main/index.html", context)
     
@@ -132,11 +132,18 @@ def index(request):
             current_step = 3
             
         elif generated_issue and signature:
-            # Шаг 4: Все данные есть - можно генерировать PDF
+            # Шаг 4: Все данные есть - показываем модальное окно предпросмотра
+            
+            # instance = form.save(commit=False)
+            # generated_issue_text = render_to_string(instance.generated_issue , {'signatuare_img' : signature}) #generate_issue_text_v2(title) #!!!!!! 
+            # instance = form.save(commit=False)
+            # instance.generated_issue = generated_issue_text
+            #!!!
+
             instance = form.save()
             show_generated_issue = True
             show_signature = True
-            current_step = 4
+            current_step = 4  # Для внутренней логики, но не отображается в прогресс-баре
     else:
         # Шаг 1: Нет title
         current_step = 1
@@ -357,9 +364,12 @@ def download_pdf_only(request):
         generated_issue = request.POST.get('generated_issue')
         
         # Генерируем PDF претензии
-        claim_context = generate_claim_pdf_context(title, generated_issue)
-        claim_html = render_to_string('main/pdf_template.html', claim_context)
-        claim_pdf = generate_pdf_from_html(claim_html)
+        # claim_context = generate_claim_pdf_context(title, generated_issue)
+        # claim_html = render_to_string('main/pdf_template.html', generated_issue)
+        # claim_pdf = generate_pdf_from_html(claim_html)
+        
+        
+        claim_pdf = generate_pdf_from_html(generated_issue)
         
         # Генерируем PDF пользовательского соглашения
         agreement_context = generate_agreement_pdf_context(title)
