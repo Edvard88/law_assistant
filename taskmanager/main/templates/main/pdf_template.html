@@ -32,9 +32,6 @@
         .content {
             margin: 30px 0;
         }
-        .signature {
-            margin-top: 50px;
-        }
         .date {
             margin-top: 20px;
         }
@@ -56,6 +53,28 @@
             display: inline-block;
             min-width: 200px;
             margin-left: 5px;
+        }
+        .signature {
+            margin-top: 50px;
+        }
+        .signature-image {
+            max-width: 20px;
+            max-height: 8px;
+            border: 1px solid #ccc;
+            display: block;
+            margin-top: 1px;
+        }
+        {% comment %} .signature-image {
+            max-width: 200px;
+            max-height: 80px;
+            border: 1px solid #ccc;
+            display: block;
+            margin-top: 5px;
+        } {% endcomment %}
+        .signature-container {
+            display: inline-flex;
+            align-items: center;
+            vertical-align: middle;
         }
     </style>
 </head>
@@ -108,13 +127,22 @@
 
     <!-- Основной текст претензии -->
     <div style="margin: 40px 0;">
-        <div style="white-space: pre-wrap; line-height: 1.6; min-height: 200px;">{{ generated_issue_text }}</div>
+        <div style="white-space: pre-wrap; line-height: 1.6; min-height: 200px;">{{ generated_issue_text|safe }}</div>
     </div>
 
     <!-- Подпись и дата -->
     <div style="margin-top: 60px;">
         <p style="margin: 5px 0;">{{ from_whom }}</p>
-        <p style="margin: 5px 0;">Подпись:  _________________________ </p>
+        <p style="margin: 5px 0;">
+            Подпись: 
+            {% if signature_data %}
+                <!-- Если есть подпись, отображаем ее как изображение -->
+                <img src="{{ signature_data }}" alt="Подпись" class="signature-image">
+            {% else %}
+                <!-- Если подписи нет, отображаем черту для подписи -->
+                _________________________
+            {% endif %}
+        </p>
         <p style="margin: 20px 0 5px 0;">Дата: {% now "j F Y" %}</p>
     </div>
 </div>

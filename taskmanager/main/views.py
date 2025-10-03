@@ -77,6 +77,9 @@ def generate_issue_text_v2(claim_text):
 
 
 
+import base64
+from django.core.files.base import ContentFile
+
 def index(request):
     # Обработка GET запроса - показываем пустую форму
     if request.method != 'POST':
@@ -111,6 +114,7 @@ def index(request):
     current_step = 1
     show_generated_issue = False
     show_signature = False
+    signature_image = None
     
     if title:
         if not generated_issue:
@@ -133,17 +137,15 @@ def index(request):
             
         elif generated_issue and signature:
             # Шаг 4: Все данные есть - показываем модальное окно предпросмотра
-            
-            # instance = form.save(commit=False)
-            # generated_issue_text = render_to_string(instance.generated_issue , {'signatuare_img' : signature}) #generate_issue_text_v2(title) #!!!!!! 
-            # instance = form.save(commit=False)
-            # instance.generated_issue = generated_issue_text
-            #!!!
-
             instance = form.save()
             show_generated_issue = True
             show_signature = True
-            current_step = 4  # Для внутренней логики, но не отображается в прогресс-баре
+            current_step = 4
+            
+            # Конвертируем подпись в base64 для отображения в HTML
+            if signature:
+                signature_image = f"data:image/png;base64,{signature}"
+    
     else:
         # Шаг 1: Нет title
         current_step = 1
@@ -154,7 +156,8 @@ def index(request):
         'form': form,
         'show_generated_issue': show_generated_issue,
         'show_signature': show_signature,
-        'current_step': current_step
+        'current_step': current_step,
+        'signature_image': signature_image,  # Добавляем подпись в контекст
     }
     
     return render(request, "main/index.html", context)
@@ -179,31 +182,34 @@ def generate_pdf_from_html(html_content):
     pdf_file.seek(0)
     return pdf_file
 
-def generate_claim_pdf_context(claim_text, generated_issue_text):
-    """Генерирует контекст для PDF претензии"""
-    return {
-        'to_whom': model_to_whom(claim_text),
-        'to_whom_address': model_to_whom_address(claim_text),
-        'to_whom_ogrn': model_to_whom_ogrn(claim_text),
-        'to_whom_inn': model_to_whom_inn(claim_text),
-        'to_whom_mail': model_to_whom_mail(claim_text),
-        'to_whom_tel': model_to_whom_tel(claim_text),
-        'from_whom': model_from_whom(claim_text),
-        'from_whom_address': model_from_whom_address(claim_text),
-        'from_whom_ogrn': model_from_whom_ogrn(claim_text),
-        'from_whom_inn': model_from_whom_inn(claim_text),
-        'from_whom_mail': model_from_whom_mail(claim_text),
-        'from_whom_tel': model_from_whom_tel(claim_text),
+def generate_claim_pdf_context(claim_text, generated_issue_text, signature_data=None):
+    """Генерирует контекст для PDF претензии с подписью"""
+    context = {
+        'to_whom': model_to_whom(claim_text) or "_________________________",
+        'to_whom_address': model_to_whom_address(claim_text) or "_________________________",
+        'to_whom_ogrn': model_to_whom_ogrn(claim_text) or "_________________________",
+        'to_whom_inn': model_to_whom_inn(claim_text) or "_________________________",
+        'to_whom_mail': model_to_whom_mail(claim_text) or "_________________________",
+        'to_whom_tel': model_to_whom_tel(claim_text) or "_________________________",
+        'from_whom': model_from_whom(claim_text) or "_________________________",
+        'from_whom_address': model_from_whom_address(claim_text) or "_________________________",
+        'from_whom_ogrn': model_from_whom_ogrn(claim_text) or "_________________________",
+        'from_whom_inn': model_from_whom_inn(claim_text) or "_________________________",
+        'from_whom_mail': model_from_whom_mail(claim_text) or "_________________________",
+        'from_whom_tel': model_from_whom_tel(claim_text) or "_________________________",
         'generated_issue_text': generated_issue_text,
+        'signature_data': signature_data,  # Добавляем данные подписи
     }
+    return context
 
-def generate_agreement_pdf_context(claim_text):
+def generate_agreement_pdf_context(claim_text, signature_data=None):
     """Генерирует контекст для PDF пользовательского соглашения"""
     return {
         'from_whom': model_from_whom(claim_text),
         'from_whom_ogrn': model_from_whom_ogrn(claim_text),
         'from_whom_inn': model_from_whom_inn(claim_text),
         'from_whom_address': model_from_whom_address(claim_text),
+        'signature_data': signature_data,  # Добавляем подпись
     }
 
 def send_pdf_email(request):
@@ -213,19 +219,19 @@ def send_pdf_email(request):
         user_agreement = request.POST.get('user_agreement')
         title = request.POST.get('title')
         generated_issue = request.POST.get('generated_issue')
-        signature = request.POST.get('signature')
+        signature = request.POST.get('signature')  # Получаем подпись
         
         if not user_agreement:
             return HttpResponse('Необходимо согласие с пользовательским соглашением')
         
         try:
-            # Генерируем PDF претензии
-            claim_context = generate_claim_pdf_context(title, generated_issue)
+            # Генерируем PDF претензии с подписью
+            claim_context = generate_claim_pdf_context(title, generated_issue, signature)
             claim_html = render_to_string('main/pdf_template.html', claim_context)
             claim_pdf = generate_pdf_from_html(claim_html)
             
             # Генерируем PDF пользовательского соглашения
-            agreement_context = generate_agreement_pdf_context(title)
+            agreement_context = generate_agreement_pdf_context(title, signature)
             agreement_html = render_to_string('main/user_agreement.html', agreement_context)
             agreement_pdf = generate_pdf_from_html(agreement_html)
             
@@ -362,17 +368,15 @@ def download_pdf_only(request):
     if request.method == 'POST':
         title = request.POST.get('title')
         generated_issue = request.POST.get('generated_issue')
+        signature = request.POST.get('signature')  # Получаем подпись
         
-        # Генерируем PDF претензии
-        # claim_context = generate_claim_pdf_context(title, generated_issue)
-        # claim_html = render_to_string('main/pdf_template.html', generated_issue)
-        # claim_pdf = generate_pdf_from_html(claim_html)
-        
-        
-        claim_pdf = generate_pdf_from_html(generated_issue)
+        # Генерируем PDF претензии с подписью
+        claim_context = generate_claim_pdf_context(title, generated_issue, signature)
+        claim_html = render_to_string('main/pdf_template.html', claim_context)
+        claim_pdf = generate_pdf_from_html(claim_html)
         
         # Генерируем PDF пользовательского соглашения
-        agreement_context = generate_agreement_pdf_context(title)
+        agreement_context = generate_agreement_pdf_context(title, signature)
         agreement_html = render_to_string('main/user_agreement.html', agreement_context)
         agreement_pdf = generate_pdf_from_html(agreement_html)
         
@@ -409,7 +413,7 @@ def download_pdf_only(request):
             law_issue = LawIssue.objects.create(
                 title=title,
                 generated_issue=generated_issue,
-                signature=request.POST.get('signature', '')
+                signature=signature
             )
             
             with open(claim_filepath, 'rb') as claim_file:

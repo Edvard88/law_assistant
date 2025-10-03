@@ -40,6 +40,8 @@
         }
         .signature-line {
             margin-top: 30px;
+            display: flex;
+            align-items: center;
         }
         .signature-name {
             margin-top: 5px;
@@ -47,6 +49,14 @@
         }
         .entrepreneur-info {
             margin-top: 40px;
+        }
+        .signature-image {
+            max-height: 40px;
+            margin-left: 10px;
+        }
+        .signature-container {
+            display: inline-flex;
+            align-items: center;
         }
     </style>
 </head>
@@ -71,15 +81,32 @@
     
     <div class="signature-section">
         <div class="signature-line">
-            Подпись Кириллова-Савакова А.В. __________
+            Подпись Кириллова-Савакова А.В. 
+            <span class="signature-container">
+                {% if signature_data %}
+                    <img src="{{ signature_data }}" alt="Подпись" class="signature-image">
+                {% else %}
+                    __________
+                {% endif %}
+            </span>
         </div>
         <div>
             удостоверяю;
         </div>
         
         <div class="entrepreneur-info">
-            <div class="signature-name">{{ from_whom }}<</div>
-         /div>
+            <div class="signature-name">{{ from_whom }}</div>
+            <div class="signature-line">
+                Подпись: 
+                <span class="signature-container">
+                    {% if signature_data %}
+                        <img src="{{ signature_data }}" alt="Подпись" class="signature-image">
+                    {% else %}
+                        __________
+                    {% endif %}
+                </span>
+            </div>
+        </div>
     </div>
 </body>
 </html>
