@@ -128,9 +128,34 @@
 
                 <!-- Превью PDF -->
                 <div class="mb-4">
-                    
-                    <div class="border p-4 bg-light" style="max-height: 700px; overflow-y: auto;">
-                        {{ form.generated_issue.value|safe }}
+                    <div clas   s="border p-4 bg-white" style="max-height: 700px; overflow-y: auto; font-family: 'DejaVu Sans', 'Times New Roman', serif; font-size: 14px;">
+                        <!-- Основной текст претензии БЕЗ дублирующего блока подписи -->
+                        {% comment %} <div style="white-space: pre-wrap; line-height: 1.6;"> {% endcomment %}
+                            {% if cleaned_generated_issue %}
+                                {{ cleaned_generated_issue|safe }}
+                            {% else %}
+                                {{ form.generated_issue.value|safe }}
+                            {% endif %}
+                        {% comment %} </div> {% endcomment %}
+                        
+                        <!-- ЕДИНСТВЕННЫЙ блок подписи в конце -->
+                        <div style="margin-top: 60px;">
+                            {% comment %} <p style="margin: 5px 0;">{{ from_whom }}</p> {% endcomment %}
+                            <div style="display: flex; align-items: center; margin: 5px 0;">
+                                <span style="margin-right: 10px;">Подпись:</span>
+                                {% if signature_image %}
+                                <div style="display: inline-block; border-bottom: 1px solid #000; min-width: 150px;">
+                                    <img src="{{ signature_image }}" alt="Подпись" 
+                                            style="height: 40px; max-width: 100px; display: block; 
+                                                    filter: hue-rotate(220deg) saturate(6) brightness(1) contrast(3) drop-shadow(0 0 0px blue) drop-shadow(0 0 0px blue) drop-shadow(0 0 0px blue);
+                                                    transform: scale(2.00);">
+                                </div>
+                                {% else %}
+                                <div style="display: inline-block; border-bottom: 1px solid #000; min-width: 150px; height: 25px; background: white;"></div>
+                                {% endif %}
+                            </div>
+                            <p style="margin: 20px 0 5px 0;">Дата: {% now "j F Y" %}</p>
+                        </div>                        
                     </div>
                     <small class="text-muted">Это предварительный просмотр того, как будет выглядеть PDF документ</small>
                 </div>
@@ -162,6 +187,8 @@
         </div>
     </div>
 </div>
+
+
 
 <!-- Модальное окно для ввода email -->
 <div class="modal fade" id="emailModal" tabindex="-1" aria-labelledby="emailModalLabel" aria-hidden="true">

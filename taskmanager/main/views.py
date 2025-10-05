@@ -24,6 +24,11 @@ from django.template.loader import get_template
 from xhtml2pdf import pisa
 
 
+import logging
+# Настройка логгера
+logger = logging.getLogger(__name__)
+
+
 # def index(request):
 #     return render(request, 'main/index.html')
 
@@ -79,6 +84,7 @@ def generate_issue_text_v2(claim_text):
 
 import base64
 from django.core.files.base import ContentFile
+import re
 
 def index(request):
     # Обработка GET запроса - показываем пустую форму
@@ -115,8 +121,13 @@ def index(request):
     show_generated_issue = False
     show_signature = False
     signature_image = None
+    from_whom = "_________________________"
+    cleaned_generated_issue = None  # Добавляем переменную для очищенного текста
     
     if title:
+        # Всегда получаем имя отправителя, если есть title
+        from_whom = model_from_whom(title) or "_________________________"
+        
         if not generated_issue:
             # Шаг 2: Генерируем текст претензии
             generated_issue_text = generate_issue_text_v2(title)
@@ -144,7 +155,24 @@ def index(request):
             
             # Конвертируем подпись в base64 для отображения в HTML
             if signature:
-                signature_image = f"data:image/png;base64,{signature}"
+                # Убедимся, что подпись в правильном формате
+                if signature.startswith('data:image/png;base64,'):
+                    signature_image = signature
+                else:
+                    signature_image = f"data:image/png;base64,{signature}"
+            
+            # Очищаем сгенерированный текст от дублирующего блока подписи
+            cleaned_generated_issue = generated_issue
+            # Удаляем стандартные блоки подписи с помощью регулярных выражений
+            cleaned_generated_issue = re.sub(r'<p[^>]*>.*[Пп]одпись\s*:.*</p>', '', cleaned_generated_issue)
+            cleaned_generated_issue = re.sub(r'[Пп]одпись\s*:.*\n', '', cleaned_generated_issue)
+            cleaned_generated_issue = re.sub(r'<p[^>]*>.*[Дд]ата\s*:.*</p>', '', cleaned_generated_issue)
+            cleaned_generated_issue = re.sub(r'[Дд]ата\s*:.*\n', '', cleaned_generated_issue)
+            #cleaned_generated_issue = re.sub(r'_{10,}', '', cleaned_generated_issue)
+            
+            # Если после очистки текст стал пустым, используем оригинальный
+            if not cleaned_generated_issue.strip():
+                cleaned_generated_issue = generated_issue
     
     else:
         # Шаг 1: Нет title
@@ -157,7 +185,9 @@ def index(request):
         'show_generated_issue': show_generated_issue,
         'show_signature': show_signature,
         'current_step': current_step,
-        'signature_image': signature_image,  # Добавляем подпись в контекст
+        'signature_image': signature_image,
+        'from_whom': from_whom,
+        'cleaned_generated_issue': cleaned_generated_issue,  # Передаем очищенный текст
     }
     
     return render(request, "main/index.html", context)
@@ -214,29 +244,50 @@ def generate_agreement_pdf_context(claim_text, signature_data=None):
 
 def send_pdf_email(request):
     """Отправляет PDF файлы на email и сохраняет их в папки проекта"""
+    logger.info("=== send_pdf_email called ===")
+    
     if request.method == 'POST':
         user_email = request.POST.get('user_email')
         user_agreement = request.POST.get('user_agreement')
         title = request.POST.get('title')
         generated_issue = request.POST.get('generated_issue')
-        signature = request.POST.get('signature')  # Получаем подпись
+        signature = request.POST.get('signature')
+        
+        logger.info(f"Received data - Email: {user_email}, Agreement: {user_agreement}")
+        logger.info(f"Title length: {len(title) if title else 0}")
+        logger.info(f"Generated issue length: {len(generated_issue) if generated_issue else 0}")
+        logger.info(f"Signature present: {bool(signature)}")
         
         if not user_agreement:
+            logger.warning("User agreement not accepted")
             return HttpResponse('Необходимо согласие с пользовательским соглашением')
+        
+        if not user_email:
+            logger.warning("No email provided")
+            return HttpResponse('Необходимо указать email адрес')
         
         try:
             # Генерируем PDF претензии с подписью
+            logger.info("Generating claim PDF...")
             claim_context = generate_claim_pdf_context(title, generated_issue, signature)
             claim_html = render_to_string('main/pdf_template.html', claim_context)
             claim_pdf = generate_pdf_from_html(claim_html)
             
             # Генерируем PDF пользовательского соглашения
+            logger.info("Generating agreement PDF...")
             agreement_context = generate_agreement_pdf_context(title, signature)
             agreement_html = render_to_string('main/user_agreement.html', agreement_context)
             agreement_pdf = generate_pdf_from_html(agreement_html)
             
-            if not claim_pdf or not agreement_pdf:
-                return HttpResponse('Ошибка генерации PDF')
+            if not claim_pdf:
+                logger.error("Claim PDF generation failed")
+                return HttpResponse('Ошибка генерации PDF претензии')
+            
+            if not agreement_pdf:
+                logger.error("Agreement PDF generation failed")
+                return HttpResponse('Ошибка генерации PDF соглашения')
+            
+            logger.info("PDF files generated successfully")
             
             # Сохраняем PDF файлы в папки проекта
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -257,47 +308,95 @@ def send_pdf_email(request):
             agreement_filepath = os.path.join(agreement_directory, agreement_filename)
             
             # Сохраняем файлы
+            logger.info(f"Saving PDF files: {claim_filepath}, {agreement_filepath}")
             claim_saved = save_pdf_to_file(claim_pdf, claim_filepath)
             agreement_saved = save_pdf_to_file(agreement_pdf, agreement_filepath)
             
             if not claim_saved or not agreement_saved:
+                logger.error("Failed to save PDF files to disk")
                 return HttpResponse('Ошибка сохранения PDF файлов')
+            
+            logger.info("PDF files saved successfully")
             
             # Сбрасываем позицию в файлах для отправки по email
             claim_pdf.seek(0)
             agreement_pdf.seek(0)
             
-            # Создаем email
-            subject = 'Ваша претензия - AI Law Assistant'
-            body = f"""
-            Уважаемый пользователь,
+            # ===== РАБОЧАЯ РУЧНАЯ SMTP ОТПРАВКА =====
+            logger.info("=== STARTING SMTP SEND ===")
             
-            Во вложении вы найдете:
-            1. Сгенерированную претензию
-            2. Пользовательское соглашение
+            import smtplib
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+            from email.mime.application import MIMEApplication
             
-            Файлы также сохранены в нашей системе.
+            # Создаем сообщение
+            msg = MIMEMultipart()
+            msg['Subject'] = 'Ваша претензия - AI Law Assistant'
+            msg['From'] = settings.DEFAULT_FROM_EMAIL
+            msg['To'] = user_email
+            if 'admin@mail.ru':  # Добавляем CC только если указан
+                msg['Cc'] = 'admin@mail.ru'
             
-            С уважением,
-            AI Law Assistant
-            """
+            # Текст письма
+            body = f"""Уважаемый пользователь,
+
+Во вложении вы найдете:
+1. Сгенерированную претензию
+2. Пользовательское соглашение
+
+Файлы также сохранены в нашей системе.
+
+С уважением,
+AI Law Assistant"""
             
-            email = EmailMessage(
-                subject=subject,
-                body=body,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[user_email],
-                cc=['admin@mail.ru', 'edvard88@mail.ru']  # Копии на системные почты
-            )
+            msg.attach(MIMEText(body, 'plain', 'utf-8'))
             
             # Прикрепляем PDF файлы
-            email.attach('претензия.pdf', claim_pdf.read(), 'application/pdf')
-            email.attach('пользовательское_соглашение.pdf', agreement_pdf.read(), 'application/pdf')
+            claim_attachment = MIMEApplication(claim_pdf.read(), _subtype='pdf')
+            claim_attachment.add_header('Content-Disposition', 'attachment', filename='претензия.pdf')
+            msg.attach(claim_attachment)
             
-            # Отправляем email
-            email.send()
+            agreement_attachment = MIMEApplication(agreement_pdf.read(), _subtype='pdf')
+            agreement_attachment.add_header('Content-Disposition', 'attachment', filename='пользовательское_соглашение.pdf')
+            msg.attach(agreement_attachment)
+            
+            # Формируем список получателей
+            recipients = [user_email]
+            if 'admin@mail.ru':
+                recipients.append('admin@mail.ru')
+            
+            logger.info(f"Recipients: {recipients}")
+            
+            # Подключаемся к SMTP
+            logger.info(f"Connecting to {settings.EMAIL_HOST}:{settings.EMAIL_PORT}")
+            
+            if getattr(settings, 'EMAIL_USE_SSL', False):
+                logger.info("Using SMTP_SSL")
+                server = smtplib.SMTP_SSL(settings.EMAIL_HOST, settings.EMAIL_PORT)
+            else:
+                logger.info("Using SMTP with TLS")
+                server = smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT)
+                if getattr(settings, 'EMAIL_USE_TLS', False):
+                    server.starttls()
+            
+            # Логинимся
+            logger.info("Logging in...")
+            server.login(settings.EMAIL_HOST_USER, settings.EMAIL_HOST_PASSWORD)
+            logger.info("Login successful")
+            
+            # Отправляем
+            logger.info("Sending email...")
+            server.sendmail(settings.DEFAULT_FROM_EMAIL, recipients, msg.as_string())
+            logger.info("Email sent via SMTP")
+            
+            # Закрываем соединение
+            server.quit()
+            logger.info("SMTP connection closed")
+            # ===== КОНЕЦ РУЧНОЙ SMTP ОТПРАВКИ =====
             
             # Сохраняем в модель LawIssue
+            logger.info("Saving to LawIssue model...")
             law_issue = LawIssue.objects.create(
                 title=title,
                 generated_issue=generated_issue,
@@ -311,20 +410,37 @@ def send_pdf_email(request):
             with open(agreement_filepath, 'rb') as agreement_file:
                 law_issue.user_agreement.save(agreement_filename, agreement_file)
             
+            logger.info("Data saved to database successfully")
+            
             success_message = f"""
             PDF успешно отправлен на вашу почту {user_email}!
             
-            Файлы также сохранены:
+            Проверьте:
+            1. Папку "Входящие"
+            2. Папку "Спам" 
+            3. Папку "Отправленные" в {settings.EMAIL_HOST_USER}
+            
+            Файлы также сохранены на сервере:
             - Претензия: {claim_filepath}
             - Пользовательское соглашение: {agreement_filepath}
             """
             
+            logger.info("=== send_pdf_email completed successfully ===")
             return HttpResponse(success_message)
             
+        except smtplib.SMTPAuthenticationError as auth_error:
+            logger.error(f"SMTP AUTHENTICATION ERROR: {auth_error}")
+            return HttpResponse(f'Ошибка аутентификации: {auth_error}')
+        except smtplib.SMTPException as smtp_error:
+            logger.error(f"SMTP ERROR: {smtp_error}")
+            return HttpResponse(f'Ошибка SMTP: {smtp_error}')
         except Exception as e:
-            return HttpResponse(f'Ошибка отправки: {str(e)}')
+            logger.error(f"General error in send_pdf_email: {str(e)}", exc_info=True)
+            return HttpResponse(f'Ошибка: {str(e)}')
     
+    logger.warning("send_pdf_email called with non-POST method")
     return redirect('home')
+
 
 def generate_pdf_xhtml2pdf(request):
     """Генерирует PDF для скачивания и сохраняет в папку"""
@@ -368,6 +484,7 @@ def download_pdf_only(request):
     if request.method == 'POST':
         title = request.POST.get('title')
         generated_issue = request.POST.get('generated_issue')
+        print("!!!! generated_issue", generated_issue)
         signature = request.POST.get('signature')  # Получаем подпись
         
         # Генерируем PDF претензии с подписью

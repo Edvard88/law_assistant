@@ -137,7 +137,16 @@
             Подпись: 
             {% if signature_data %}
                 <!-- Если есть подпись, отображаем ее как изображение -->
-                <img src="{{ signature_data }}" alt="Подпись" class="signature-image">
+                {% comment %} <img src="{{ signature_data }}" alt="Подпись" class="signature-image"> {% endcomment %}
+                <img src="{{signature_data}}" alt="Подпись" 
+                     style="height: 25px; max-width: 150px; display: block;
+                            filter: 
+                                hue-rotate(220deg) 
+                                saturate(4) 
+                                brightness(0.7) 
+                                contrast(3)
+                                drop-shadow(0 0 0 blue)
+                                drop-shadow(0 0 0 blue);" alt="Подпись" class="signature-image">
             {% else %}
                 <!-- Если подписи нет, отображаем черту для подписи -->
                 _________________________

@@ -176,13 +176,15 @@ CKEDITOR_BASEPATH = "/static/ckeditor/ckeditor/"
 
 # Настройки email
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.mail.ru'
-EMAIL_PORT = 25
+EMAIL_HOST = 'smtp.yandex.ru'
+EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-#EMAIL_USE_SSL = False
-EMAIL_HOST_USER = ''
-EMAIL_HOST_PASSWORD = ''
-DEFAULT_FROM_EMAIL = ''
+EMAIL_USE_SSL = False
+EMAIL_HOST_USER = 'edvard2901@yandex.ru'
+EMAIL_HOST_PASSWORD =  ''
+DEFAULT_FROM_EMAIL = 'edvard2901@yandex.ru'
+SERVER_EMAIL = 'edvard2901@yandex.ru'  # Для системных писем
+
 
 # Отключить проверку SSL сертификата
 EMAIL_SSL_CERTFILE = None
@@ -192,3 +194,35 @@ EMAIL_SSL_CERT_REQS = None  # Отключаем проверку сертифи
 # Дополнительные настройки для обхода SSL
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
+
+# Проверка настроек email (для отладки)
+if DEBUG:
+    # В режиме отладки можно выводить письма в консоль
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
+
+# Добавьте в конец settings.py
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'file': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': 'debug.log',
+        },
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'main.views': {
+            'handlers': ['file', 'console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+    },
+}
