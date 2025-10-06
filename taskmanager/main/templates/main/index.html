@@ -167,12 +167,12 @@
                         <input type="hidden" name="title" value="{{ form.title.value }}">
                         <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
                         <input type="hidden" name="signature" value="{{ form.signature.value }}">
-                        <button type='submit' class='btn btn-success'>Скачать PDF</button>
+                        {% comment %} <button type='submit' class='btn btn-success'>Скачать PDF</button> {% endcomment %}
                     </form>
 
                     <!-- Кнопка для открытия модального окна отправки на почту -->
                     <button type="button" class="btn btn-primary mb-2" data-bs-toggle="modal" data-bs-target="#emailModal">
-                        Отправить PDF на почту
+                        Отправить на проверку
                     </button>
 
                     <form method='post' action="{% url 'home' %}" class="mb-2">

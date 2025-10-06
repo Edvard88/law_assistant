@@ -212,6 +212,35 @@ def generate_pdf_from_html(html_content):
     pdf_file.seek(0)
     return pdf_file
 
+
+def generate_pdf_weasyprint(html_content):
+    """Генерация PDF через WeasyPrint (работает лучше на Mac)"""
+    try:
+        from weasyprint import HTML
+        from weasyprint.text.fonts import FontConfiguration
+        
+        font_config = FontConfiguration()
+        
+        pdf_file = io.BytesIO()
+        
+        HTML(
+            string=html_content,
+            encoding='utf-8'
+        ).write_pdf(
+            pdf_file,
+            font_config=font_config
+        )
+        
+        pdf_file.seek(0)
+        print("✓ PDF generated successfully with WeasyPrint")
+        return pdf_file
+        
+    except Exception as e:
+        print(f"❌ WeasyPrint error: {e}")
+        # Fallback на xhtml2pdf
+        print("Trying xhtml2pdf fallback...")
+        return generate_pdf_from_html(html_content)
+
 def generate_claim_pdf_context(claim_text, generated_issue_text, signature_data=None):
     """Генерирует контекст для PDF претензии с подписью"""
     context = {
@@ -267,17 +296,47 @@ def send_pdf_email(request):
             return HttpResponse('Необходимо указать email адрес')
         
         try:
+
             # Генерируем PDF претензии с подписью
             logger.info("Generating claim PDF...")
             claim_context = generate_claim_pdf_context(title, generated_issue, signature)
             claim_html = render_to_string('main/pdf_template.html', claim_context)
-            claim_pdf = generate_pdf_from_html(claim_html)
+            #claim_html = render_to_string('main/pdf_template_simple.html', claim_context)
+            #claim_pdf = generate_pdf_from_html(claim_html)
+            claim_pdf = generate_pdf_weasyprint(claim_html)
             
             # Генерируем PDF пользовательского соглашения
             logger.info("Generating agreement PDF...")
             agreement_context = generate_agreement_pdf_context(title, signature)
             agreement_html = render_to_string('main/user_agreement.html', agreement_context)
-            agreement_pdf = generate_pdf_from_html(agreement_html)
+            #agreement_pdf = generate_pdf_from_html(agreement_html)
+            agreement_pdf = generate_pdf_weasyprint(agreement_html)
+
+
+            # #####
+            #             # ===== ДОБАВЬТЕ ЗДЕСЬ ПРОВЕРКУ ДАННЫХ =====
+            # logger.info("=== CHECKING TEMPLATE DATA ===")
+            # logger.info(f"to_whom: {claim_context.get('to_whom')}")
+            # logger.info(f"from_whom: {claim_context.get('from_whom')}")
+            # logger.info(f"to_whom_address: {claim_context.get('to_whom_address')}")
+            # logger.info(f"from_whom_address: {claim_context.get('from_whom_address')}")
+            # logger.info(f"generated_issue_text sample: {str(claim_context.get('generated_issue_text', ''))[:200]}")
+            
+            # # Проверим сырой HTML до рендеринга
+            # test_html = "<html><body><p>Тестовый русский текст: Проверка кодировки</p></body></html>"
+            # test_pdf = generate_pdf_from_html(test_html)
+            # if test_pdf:
+            #     logger.info("✓ Simple test HTML works - кодировка в порядке")
+            # else:
+            #     logger.info("✗ Simple test HTML fails - проблема с генерацией")
+            
+            # # Проверим вывод моделей
+            # logger.info("=== CHECKING MODEL OUTPUTS ===")
+            # logger.info(f"model_to_whom: {model_to_whom(title)}")
+            # logger.info(f"model_from_whom: {model_from_whom(title)}")
+            # # ===== КОНЕЦ ПРОВЕРКИ ДАННЫХ =====
+
+            # #####
             
             if not claim_pdf:
                 logger.error("Claim PDF generation failed")
@@ -442,6 +501,44 @@ AI Law Assistant"""
     return redirect('home')
 
 
+from weasyprint import HTML
+import tempfile
+
+def test_pdf_generation(request):
+    """Тестовая функция для проверки PDF"""
+
+    
+    
+    # Простейший HTML с русским текстом
+    test_html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body { font-family: Arial; font-size: 14px; }
+        </style>
+    </head>
+    <body>
+        <h1>Тестовый документ</h1>
+        <p>Это тестовый текст на русском языке.</p>
+        <p>Кириллица: АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ</p>
+        <p>абвгдеёжзийклмнопрстуфхцчшщъыьэюя</p>
+    </body>
+    </html>
+    """
+    
+    try:
+        pdf_file = io.BytesIO()
+        HTML(string=test_html, encoding='utf-8').write_pdf(pdf_file)
+        pdf_file.seek(0)
+        
+        response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="test.pdf"'
+        return response
+    except Exception as e:
+        return HttpResponse(f"Error: {e}")
+
 def generate_pdf_xhtml2pdf(request):
     """Генерирует PDF для скачивания и сохраняет в папку"""
     if request.method == 'POST':
@@ -451,8 +548,8 @@ def generate_pdf_xhtml2pdf(request):
         context = generate_claim_pdf_context(title, generated_issue)
         html = render_to_string('main/pdf_template.html', context)
         
-        # Генерируем PDF
-        pdf_file = generate_pdf_from_html(html)
+        # Генерируем PDF через WeasyPrint
+        pdf_file = generate_pdf_weasyprint(html)  # ← ИЗМЕНИЛИ НА WeasyPrint
         
         if not pdf_file:
             return HttpResponse('Ошибка генерации PDF')
@@ -484,20 +581,31 @@ def download_pdf_only(request):
     if request.method == 'POST':
         title = request.POST.get('title')
         generated_issue = request.POST.get('generated_issue')
-        print("!!!! generated_issue", generated_issue)
-        signature = request.POST.get('signature')  # Получаем подпись
+        signature = request.POST.get('signature')
         
-        # Генерируем PDF претензии с подписью
-        claim_context = generate_claim_pdf_context(title, generated_issue, signature)
-        claim_html = render_to_string('main/pdf_template.html', claim_context)
-        claim_pdf = generate_pdf_from_html(claim_html)
+        # Если есть подпись, заменяем прочерки на изображение подписи
+        if signature:
+            # Создаем HTML для подписи с вашим стилем
+            signature_html = f'<img src="{signature}" style="height: 45px; max-width: 150px; display: block; filter: hue-rotate(220deg) saturate(4) brightness(0.7) contrast(3) drop-shadow(0 0 0 blue) drop-shadow(0 0 0 blue);" alt="Подпись">'
+            
+            # Заменяем прочерки на подпись
+            final_html = generated_issue.replace(
+                '<!-- Если подписи нет, отображаем черту для подписи --> _________________________',
+                signature_html
+            )
+        else:
+            # Оставляем как есть (прочерки)
+            final_html = generated_issue
         
-        # Генерируем PDF пользовательского соглашения
-        agreement_context = generate_agreement_pdf_context(title, signature)
-        agreement_html = render_to_string('main/user_agreement.html', agreement_context)
-        agreement_pdf = generate_pdf_from_html(agreement_html)
+        print("=== DEBUG final_html ===")
+        print("Content (last 500 chars):")
+        print(final_html[-500:] if final_html else "EMPTY")
+        print("=== END DEBUG ===")
         
-        if not claim_pdf or not agreement_pdf:
+        # Генерируем PDF из финального HTML
+        claim_pdf = generate_pdf_weasyprint(final_html)
+        
+        if not claim_pdf:
             return HttpResponse('Ошибка генерации PDF')
         
         # Сохраняем PDF файлы в папки проекта
@@ -517,6 +625,11 @@ def download_pdf_only(request):
         
         # Сохраняем файлы
         claim_saved = save_pdf_to_file(claim_pdf, claim_filepath)
+        
+        # Для соглашения используем обычный подход
+        agreement_context = generate_agreement_pdf_context(title, signature)
+        agreement_html = render_to_string('main/user_agreement.html', agreement_context)
+        agreement_pdf = generate_pdf_weasyprint(agreement_html)
         agreement_saved = save_pdf_to_file(agreement_pdf, agreement_filepath)
         
         if claim_saved and agreement_saved:

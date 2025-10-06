@@ -83,11 +83,7 @@
         <div class="signature-line">
             Подпись Кириллова-Савакова А.В. 
             <span class="signature-container">
-                {% if signature_data %}
-                    <img src="{{ signature_data }}" alt="Подпись" class="signature-image">
-                {% else %}
                     __________
-                {% endif %}
             </span>
         </div>
         <div>
@@ -97,14 +93,22 @@
         <div class="entrepreneur-info">
             <div class="signature-name">{{ from_whom }}</div>
             <div class="signature-line">
-                Подпись: 
-                <span class="signature-container">
-                    {% if signature_data %}
-                        <img src="{{ signature_data }}" alt="Подпись" class="signature-image">
-                    {% else %}
-                        __________
-                    {% endif %}
-                </span>
+                {% if signature_data %}
+                <!-- Если есть подпись, отображаем ее как изображение -->
+                {% comment %} <img src="{{ signature_data }}" alt="Подпись" class="signature-image"> {% endcomment %}
+                <img src="{{signature_data}}" alt="Подпись" 
+                     style="height: 45px; max-width: 150px; display: block;
+                            filter: 
+                                hue-rotate(220deg) 
+                                saturate(4) 
+                                brightness(0.7) 
+                                contrast(3)
+                                drop-shadow(0 0 0 blue)
+                                drop-shadow(0 0 0 blue);" alt="Подпись" class="signature-image">
+            {% else %}
+                <!-- Если подписи нет, отображаем черту для подписи -->
+                _________________________
+            {% endif %}
             </div>
         </div>
     </div>

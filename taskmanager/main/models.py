@@ -22,8 +22,6 @@ class LawIssue(models.Model):
                                        null=True)
     
     
-    #RichTextField(blank=True, null=True) 
-    
     signature = SignaturePadField(blank=True, null=True)
 
     generated_claim_pdf = models.FileField(verbose_name = "Cгенерированный pdf претензии", 
@@ -34,6 +32,7 @@ class LawIssue(models.Model):
                                       upload_to=user_agreement_pdf_path,
                                       blank=True)
     #user_mail = models.CharField("Mail пользвователя")
+    
      
     
     def __str__(self):
