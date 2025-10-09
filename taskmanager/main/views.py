@@ -12,7 +12,7 @@ from datetime import datetime
 # Create your views here.
 from .models import LawIssue
 from .forms import LawIssueForm
-from .llm_model import model_predict, \
+from .llm_model import model_predict, model_issue_text,\
                         model_to_whom, model_to_whom_address, model_to_whom_ogrn, model_to_whom_inn, model_to_whom_mail, model_to_whom_tel, \
                         model_from_whom, model_from_whom_address, model_from_whom_ogrn, model_from_whom_inn, model_from_whom_mail, model_from_whom_tel
 
@@ -57,22 +57,25 @@ def save_pdf_to_file(pdf_content, file_path):
 def generate_issue_text_v2(claim_text):
     """Генерирует текст претензии с использованием модели и шаблона"""
     generated_issue = model_predict(claim_text)
+    print("!!!!!claim_text", claim_text)
+    print("!!!!!generated_issue", generated_issue)
+    print("!!!model_issue_text(generated_issue)", model_issue_text(generated_issue))
     
     # Создаем контекст для шаблона
     context = {
-        'to_whom': model_to_whom(claim_text),
-        'to_whom_address': model_to_whom_address(claim_text),
-        'to_whom_ogrn': model_to_whom_ogrn(claim_text),
-        'to_whom_inn': model_to_whom_inn(claim_text),
-        'to_whom_mail': model_to_whom_mail(claim_text),
-        'to_whom_tel': model_to_whom_tel(claim_text),
-        'from_whom': model_from_whom(claim_text),
-        'from_whom_address': model_from_whom_address(claim_text),
-        'from_whom_ogrn': model_from_whom_ogrn(claim_text),
-        'from_whom_inn': model_from_whom_inn(claim_text),
-        'from_whom_mail': model_from_whom_mail(claim_text),
-        'from_whom_tel': model_from_whom_tel(claim_text),
-        'generated_issue_text': generated_issue,
+        'to_whom': model_to_whom(generated_issue),
+        'to_whom_address': model_to_whom_address(generated_issue),
+        'to_whom_ogrn': model_to_whom_ogrn(generated_issue),
+        'to_whom_inn': model_to_whom_inn(generated_issue),
+        'to_whom_mail': model_to_whom_mail(generated_issue),
+        'to_whom_tel': model_to_whom_tel(generated_issue),
+        'from_whom': model_from_whom(generated_issue),
+        'from_whom_address': model_from_whom_address(generated_issue),
+        'from_whom_ogrn': model_from_whom_ogrn(generated_issue),
+        'from_whom_inn': model_from_whom_inn(generated_issue),
+        'from_whom_mail': model_from_whom_mail(generated_issue),
+        'from_whom_tel': model_from_whom_tel(generated_issue),
+        'generated_issue_text': model_issue_text(generated_issue),
     }
     
     # Генерируем полный HTML текст претензии
@@ -296,47 +299,31 @@ def send_pdf_email(request):
             return HttpResponse('Необходимо указать email адрес')
         
         try:
-
-            # Генерируем PDF претензии с подписью
-            logger.info("Generating claim PDF...")
-            claim_context = generate_claim_pdf_context(title, generated_issue, signature)
-            claim_html = render_to_string('main/pdf_template.html', claim_context)
-            #claim_html = render_to_string('main/pdf_template_simple.html', claim_context)
-            #claim_pdf = generate_pdf_from_html(claim_html)
-            claim_pdf = generate_pdf_weasyprint(claim_html)
+            # Если есть подпись, заменяем прочерки на изображение подписи
+            if signature:
+                # Создаем HTML для подписи с вашим стилем
+                signature_html = f'<img src="{signature}" style="height: 45px; max-width: 150px; display: block; filter: hue-rotate(220deg) saturate(4) brightness(0.7) contrast(3) drop-shadow(0 0 0 blue) drop-shadow(0 0 0 blue);" alt="Подпись">'
+                
+                # Заменяем прочерки на подпись
+                final_html = generated_issue.replace(
+                    '<!-- Если подписи нет, отображаем черту для подписи --> _________________________',
+                    signature_html
+                )
+            else:
+                # Оставляем как есть (прочерки)
+                final_html = generated_issue
+            
+            # Генерируем PDF претензии с подписью из финального HTML
+            claim_pdf = generate_pdf_weasyprint(final_html)
+            
+            if not claim_pdf:
+                return HttpResponse('Ошибка генерации PDF')
             
             # Генерируем PDF пользовательского соглашения
             logger.info("Generating agreement PDF...")
-            agreement_context = generate_agreement_pdf_context(title, signature)
+            agreement_context = generate_claim_pdf_context(title, generated_issue, signature)
             agreement_html = render_to_string('main/user_agreement.html', agreement_context)
-            #agreement_pdf = generate_pdf_from_html(agreement_html)
             agreement_pdf = generate_pdf_weasyprint(agreement_html)
-
-
-            # #####
-            #             # ===== ДОБАВЬТЕ ЗДЕСЬ ПРОВЕРКУ ДАННЫХ =====
-            # logger.info("=== CHECKING TEMPLATE DATA ===")
-            # logger.info(f"to_whom: {claim_context.get('to_whom')}")
-            # logger.info(f"from_whom: {claim_context.get('from_whom')}")
-            # logger.info(f"to_whom_address: {claim_context.get('to_whom_address')}")
-            # logger.info(f"from_whom_address: {claim_context.get('from_whom_address')}")
-            # logger.info(f"generated_issue_text sample: {str(claim_context.get('generated_issue_text', ''))[:200]}")
-            
-            # # Проверим сырой HTML до рендеринга
-            # test_html = "<html><body><p>Тестовый русский текст: Проверка кодировки</p></body></html>"
-            # test_pdf = generate_pdf_from_html(test_html)
-            # if test_pdf:
-            #     logger.info("✓ Simple test HTML works - кодировка в порядке")
-            # else:
-            #     logger.info("✗ Simple test HTML fails - проблема с генерацией")
-            
-            # # Проверим вывод моделей
-            # logger.info("=== CHECKING MODEL OUTPUTS ===")
-            # logger.info(f"model_to_whom: {model_to_whom(title)}")
-            # logger.info(f"model_from_whom: {model_from_whom(title)}")
-            # # ===== КОНЕЦ ПРОВЕРКИ ДАННЫХ =====
-
-            # #####
             
             if not claim_pdf:
                 logger.error("Claim PDF generation failed")
@@ -394,8 +381,10 @@ def send_pdf_email(request):
             msg['Subject'] = 'Ваша претензия - AI Law Assistant'
             msg['From'] = settings.DEFAULT_FROM_EMAIL
             msg['To'] = user_email
-            if 'admin@mail.ru':  # Добавляем CC только если указан
-                msg['Cc'] = 'admin@mail.ru'
+            
+            # ЗАМЕНА: Указываем email адреса для копий
+            copy_emails = ['edvard88@inbox.ru', '89036414195@mail.ru']
+            msg['Cc'] = ', '.join(copy_emails)
             
             # Текст письма
             body = f"""Уважаемый пользователь,
@@ -420,10 +409,8 @@ AI Law Assistant"""
             agreement_attachment.add_header('Content-Disposition', 'attachment', filename='пользовательское_соглашение.pdf')
             msg.attach(agreement_attachment)
             
-            # Формируем список получателей
-            recipients = [user_email]
-            if 'admin@mail.ru':
-                recipients.append('admin@mail.ru')
+            # Формируем список получателей (основной + копии)
+            recipients = [user_email] + copy_emails
             
             logger.info(f"Recipients: {recipients}")
             
@@ -471,21 +458,30 @@ AI Law Assistant"""
             
             logger.info("Data saved to database successfully")
             
-            success_message = f"""
-            PDF успешно отправлен на вашу почту {user_email}!
+            # success_message = f"""
+            # PDF успешно отправлен на вашу почту {user_email}!
             
-            Проверьте:
-            1. Папку "Входящие"
-            2. Папку "Спам" 
-            3. Папку "Отправленные" в {settings.EMAIL_HOST_USER}
+            # Проверьте:
+            # 1. Папку "Входящие"
+            # 2. Папку "Спам" 
+            # 3. Папку "Отправленные" в {settings.EMAIL_HOST_USER}
             
-            Файлы также сохранены на сервере:
-            - Претензия: {claim_filepath}
-            - Пользовательское соглашение: {agreement_filepath}
-            """
+            # Копии отправлены на: {', '.join(copy_emails)}
+            
+            # Файлы также сохранены на сервере:
+            # - Претензия: {claim_filepath}
+            # - Пользовательское соглашение: {agreement_filepath}
+            # """
+            
+            # logger.info("=== send_pdf_email completed successfully ===")
+            # return HttpResponse(success_message)
+            
+            context = {
+                'user_email': user_email,
+            }
             
             logger.info("=== send_pdf_email completed successfully ===")
-            return HttpResponse(success_message)
+            return render(request, 'main/success_mail_page.html', context)
             
         except smtplib.SMTPAuthenticationError as auth_error:
             logger.error(f"SMTP AUTHENTICATION ERROR: {auth_error}")
@@ -504,40 +500,6 @@ AI Law Assistant"""
 from weasyprint import HTML
 import tempfile
 
-def test_pdf_generation(request):
-    """Тестовая функция для проверки PDF"""
-
-    
-    
-    # Простейший HTML с русским текстом
-    test_html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <style>
-            body { font-family: Arial; font-size: 14px; }
-        </style>
-    </head>
-    <body>
-        <h1>Тестовый документ</h1>
-        <p>Это тестовый текст на русском языке.</p>
-        <p>Кириллица: АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ</p>
-        <p>абвгдеёжзийклмнопрстуфхцчшщъыьэюя</p>
-    </body>
-    </html>
-    """
-    
-    try:
-        pdf_file = io.BytesIO()
-        HTML(string=test_html, encoding='utf-8').write_pdf(pdf_file)
-        pdf_file.seek(0)
-        
-        response = HttpResponse(pdf_file.read(), content_type='application/pdf')
-        response['Content-Disposition'] = 'attachment; filename="test.pdf"'
-        return response
-    except Exception as e:
-        return HttpResponse(f"Error: {e}")
 
 def generate_pdf_xhtml2pdf(request):
     """Генерирует PDF для скачивания и сохраняет в папку"""
@@ -596,11 +558,6 @@ def download_pdf_only(request):
         else:
             # Оставляем как есть (прочерки)
             final_html = generated_issue
-        
-        print("=== DEBUG final_html ===")
-        print("Content (last 500 chars):")
-        print(final_html[-500:] if final_html else "EMPTY")
-        print("=== END DEBUG ===")
         
         # Генерируем PDF из финального HTML
         claim_pdf = generate_pdf_weasyprint(final_html)

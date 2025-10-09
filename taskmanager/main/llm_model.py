@@ -1,9 +1,14 @@
 from openai import OpenAI
 import os
 import time
+from dotenv import load_dotenv
+import os
 
-OPENAI_API_KEY = ''
+# Загружаем переменные из .env файла
+load_dotenv()
 
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+ 
 # Пути к вашим TXT файлам
 file_paths = [
     "main/data/Иск_о_взыскании_долга.txt",
@@ -48,91 +53,129 @@ def model_predict(user_message):
   client = OpenAI(api_key=OPENAI_API_KEY)
 
   system_prompt = f"""
+Ты ассистент юриста.
+Тебе нужно написать претензию и отправить ее получателю.
+Проанализируй ситуацию пользователя и напиши текст претензии.
 
-  Ты ассистент юриста. У тебя есть следующие шаблоны документов: {templates_content}
+Перед анализом ситуации и выбором шаблона, извлеки из предоставленного текста все возможные данные об отправителе и получателе. 
+Если какие-то данные отсутствуют в тексте, вместо них поставь длинную линию "________________________".
 
+from_whom: [ФИО или название организации отправителя]
+from_whom_address: [Почтовый адрес отправителя]
+from_whom_tel: [Телефон отправителя]
+from_whom_mail: [E-mail отправителя]
+from_whom_inn: [ИНН отправителя]
+from_whom_ogrn: [ОГРН/ОГРНИП отправителя]
 
-  ИНСТРУКЦИИ (ВЫПОЛНИ СТРОГО):
-  1. Проанализируй ситуацию пользователя и определи тип спора
-  2. Выбери ПОДХОДЯЩИЙ шаблон из приведенных выше
-  3. ВЕРБАТИМНО воспроизведи структуру, форматирование и стиль выбранного шаблона
-  4. Заполни пропуски ([...], ____ и т.д.) данными из запроса пользователя
-  5. НИЧЕГО НЕ МЕНЯЙ в списке документов в приложении
-  6. Сохрани все разделы, заголовки, нумерацию и оформление оригинала
-  7. Если ситуация не подходит ни под один шаблон - вежливо сообщи об этом
+to_whom: [ФИО или название организации получателя]
+to_whom_address: [Почтовый адрес получателя]
+to_whom_tel: [Телефон получателя]
+to_whom_mail: [E-mail получателя]
+to_whom_inn: [ИНН получателя]
+to_whom_ogrn: [ОГРН получателя]
+generated_issue_text: [Текст иска или претензии, который составь по входному тексту от пользователя]
 
-  Важно: результат должен быть готов к печати и подаче в суд!
+Дополнительно:
+1. Не надо в своем тексте писать "С уважением", "[Дата]", "[Подпись]" - это уже есть в шаблоне документа, куда будут вставляться данные.
+2. Можешь основной текст generated_issue_text написать с переносом строк, выделяяя абзацы с html тегами, тк он будет вставляться в html шаблон.
+
+Важно: результат должен быть готов к печати и подаче в суд!
 
   """
-  return "Тест"
+#   return "Тест"
 
-#   ### Отправляем запрос
-#   response = client.chat.completions.create(
-#       model="gpt-4o",  # Можно использовать gpt-4o-mini для экономии
-#       messages=[
-#           {"role": "system",
-#           "content": system_prompt},
-#           {"role": "user",
-#           "content": user_message,
-#           "attachments": [
-#                   {
-#                       "file_id": file_ids[0],
-#                       "tools": [{"type": "file_search"}]
-#                   },
-#                   {
-#                       "file_id": file_ids[1],
-#                       "tools": [{"type": "file_search"}]
-#                   }
-#               ]},
+  ### Отправляем запрос
+  response = client.chat.completions.create(
+      model="gpt-4o",  # Можно использовать gpt-4o-mini для экономии
+      messages=[
+          {"role": "system",
+          "content": system_prompt},
+          {"role": "user",
+          "content": user_message,
+         #  "attachments": [
+         #          {
+         #              "file_id": file_ids[0],
+         #              "tools": [{"type": "file_search"}]
+         #          },
+         #          {
+         #              "file_id": file_ids[1],
+         #              "tools": [{"type": "file_search"}]
+         #          }
+         #      ]
+              },
 
-#       ],
+      ],
 
-#       temperature=0.1,    # Минимальная креативность - строгое следование шаблону
-#       max_tokens=4000,    # Увеличиваем лимит для длинных документов
-#       top_p=0.9           # Для более предсказуемых результатов
-#   )
+      temperature=0.1,    # Минимальная креативность - строгое следование шаблону
+      max_tokens=4000,    # Увеличиваем лимит для длинных документов
+      top_p=0.9           # Для более предсказуемых результатов
+  )
 
 #   print("="*70)
 #   print("✅ СОСТАВЛЕННЫЙ ИСК (готов к печати):")
 #   print("="*70)
 #   print(response.choices[0].message.content)
 
-#   return response.choices[0].message.content
+  return response.choices[0].message.content
+
+import re
+
+def extract_after_label(text, label, end_marker=None):
+    """
+    Вспомогательная функция для извлечения значения после метки.
+    """
+    # Ищем до следующей метки или до generated_issue_text
+    pattern = re.escape(label) + r'\s*:\s*(.*?)\s*(?=\n\w+|\n\n|generated_issue_text|\Z)'
+    match = re.search(pattern, text, re.DOTALL)
+    
+    if match:
+        value = match.group(1).strip()
+        if not value:
+            return None
+        return value
+    return None
 
 def model_to_whom(user_message):
-   return """ Общество с ограниченной ответственностью 
-«Современные Фонды Недвижимости»
-Генеральном директору Черных Е.В"""
+    return extract_after_label(user_message, "to_whom")
 
 def model_to_whom_address(user_message):
-   return """121059, г. Москва, ул. Киевская, д. 7, корп. 2, этаж 5, ком. 40,41,42"""
+    return extract_after_label(user_message, "to_whom_address")
 
 def model_to_whom_ogrn(user_message):
-   return """11111111"""
+    return extract_after_label(user_message, "to_whom_ogrn")
 
 def model_to_whom_inn(user_message):
-   return """22222222"""
+    return extract_after_label(user_message, "to_whom_inn")
 
 def model_to_whom_mail(user_message):
-   return """e-mail:eanikushkina@sfnam.ru"""
+    return extract_after_label(user_message, "to_whom_mail")
 
 def model_to_whom_tel(user_message):
-   return """"""
+    return extract_after_label(user_message, "to_whom_tel")
 
 def model_from_whom(user_message):
-   return """ Индивидуального предпринимателя Гуряевой Э.Г. """
+    return extract_after_label(user_message, "from_whom")
 
 def model_from_whom_address(user_message):
-   return  """125080, г. Москва, Волоколамское ш., д. 15/22 кв. 305"""
-   
+    return extract_after_label(user_message, "from_whom_address")
+
 def model_from_whom_ogrn(user_message):
-   return """318774600178018"""
+    return extract_after_label(user_message, "from_whom_ogrn")
 
 def model_from_whom_inn(user_message):
-   return """501714525062"""
- 
+    return extract_after_label(user_message, "from_whom_inn")
+
 def model_from_whom_mail(user_message):
-   return """e-mail: guryavou@mail.ru"""
+    return extract_after_label(user_message, "from_whom_mail")
 
 def model_from_whom_tel(user_message):
-   return """8-903-555-55-55"""
+    return extract_after_label(user_message, "from_whom_tel")
+
+def model_issue_text(user_message):
+    """
+    Извлекает текст самой претензии (всё что после 'generated_issue_text:')
+    """
+    parts = user_message.split('generated_issue_text:')
+    if len(parts) > 1:
+        return parts[1].strip()
+    return None

@@ -100,8 +100,9 @@
     <!-- Получатель (справа) -->
     <div style="text-align: right; margin-bottom: 40px;">
         <p style="font-weight: bold; margin: 5px 0;">Кому: {{ to_whom }}</p>
-        <p style="margin: 5px 0;">ОГРН {{ to_whom_ogrn }} ИНН {{ to_whom_inn }}</p>
         <p style="margin: 5px 0;">{{ to_whom_address }}</p>
+        <p style="margin: 5px 0;">ОГРН {{ to_whom_ogrn }}</p>
+        <p style="margin: 5px 0;">ИНН {{ to_whom_inn }}</p>
         
         {% if to_whom_tel %}
         <p style="margin: 5px 0;">Тел: {{ to_whom_tel }}</p>
@@ -110,7 +111,7 @@
         {% endif %}
         
         {% if to_whom_mail %}
-        <p style="margin: 5px 0;">{{ to_whom_mail }}</p>
+        <p style="margin: 5px 0;">E-mail: {{ to_whom_mail }}</p>
         {% else %}
         <p style="margin: 5px 0;">E-mail: _________________________</p>
         {% endif %}
@@ -120,8 +121,9 @@
     <!-- Отправитель (слева) -->
     <div style="text-align: right; margin-bottom: 40px;">
         <p style="font-weight: bold; margin: 5px 0;">От: {{ from_whom }}</p>
-        <p style="margin: 5px 0;">ОГРНИП {{ from_whom_ogrn }} ИНН {{ from_whom_inn }}</p>
         <p style="margin: 5px 0;">{{ from_whom_address }}</p>
+        <p style="margin: 5px 0;">ОГРН {{ from_whom_ogrn }}</p>
+        <p style="margin: 5px 0;">ИНН {{ from_whom_inn }}</p>
         
         {% if from_whom_tel %}
         <p style="margin: 5px 0;">Тел. {{ from_whom_tel }}</p>

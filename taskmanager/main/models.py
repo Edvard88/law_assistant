@@ -31,8 +31,12 @@ class LawIssue(models.Model):
     user_agreement = models.FileField(verbose_name = "Пользовательское соглашение", 
                                       upload_to=user_agreement_pdf_path,
                                       blank=True)
-    #user_mail = models.CharField("Mail пользвователя")
     
+    # Добавленные поля для контактных данных пользователя
+    user_mail = models.EmailField("Email пользователя", max_length=255, blank=True, null=True)
+    user_tel = models.CharField("Телефон пользователя", max_length=20, blank=True, null=True)
+     
+
      
     
     def __str__(self):

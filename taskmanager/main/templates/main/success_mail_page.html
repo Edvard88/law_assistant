@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Письмо отправлено успешно!</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .success-section {
+            background: linear-gradient(135deg, #d4edda, #c3e6cb);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border-left: 5px solid #28a745;
+        }
+        .offer-section {
+            background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border-left: 5px solid #2196f3;
+        }
+        .checklist {
+            list-style: none;
+            padding-left: 0;
+        }
+        .checklist li {
+            padding: 8px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+        .checklist li:before {
+            content: "✓";
+            color: #28a745;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+        .benefit-list {
+            list-style: none;
+            padding-left: 0;
+        }
+        .benefit-list li {
+            padding: 10px 0;
+            padding-left: 35px;
+            position: relative;
+        }
+        .benefit-list li:before {
+            content: "🎯";
+            position: absolute;
+            left: 0;
+            font-size: 18px;
+        }
+        .highlight-box {
+            background: #fff3cd;
+            border: 2px solid #ffeaa7;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .btn-custom {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            border: none;
+            padding: 12px 30px;
+            font-weight: bold;
+            border-radius: 25px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <!-- Заголовок успеха -->
+                <div class="text-center mb-5">
+                    <h1 class="display-5 fw-bold text-success">PDF успешно отправлен!</h1>
+                    <p class="lead text-muted">Ваша претензия отправлена на почту <strong class="text-primary">{{ user_email }}</strong></p>
+                </div>
+
+                <!-- Секция с информацией об отправке -->
+                <div class="success-section">
+                    <h3 class="mb-4">📬 Где искать письмо?</h3>
+                    <ul class="checklist">
+                        <li><strong>Папка "Входящие"</strong> - основное место получения</li>
+                        <li><strong>Папка "Спам"</strong> - проверьте, если не нашли в основных</li>
+                    </ul>
+                    
+                    <div class="alert alert-success mt-4">
+                        <h6>✅ Ваши документы готовы!</h6>
+                        <p class="mb-0">В письме вы найдете два PDF файла: сгенерированную претензию и пользовательское соглашение. Все файлы также сохранены в нашей системе для вашего удобства.</p>
+                    </div>
+                </div>
+
+                <!-- Секция с предложением -->
+                <div class="offer-section">
+                    <h3 class="mb-4">💼 Хотите профессиональную проверку вашей претензии?</h3>
+                    
+                    <div class="highlight-box">
+                        <h4 class="text-center mb-3">Всего за <span class="text-danger display-6">999 рублей</span></h4>
+                        <p class="text-center mb-0">Получите полный сервис от профессиональных юристов!</p>
+                    </div>
+
+                    <h5 class="mt-4 mb-3">Что входит в услугу:</h5>
+                    <ul class="benefit-list">
+                        <li><strong>Профессиональная проверка текста</strong> опытным юристом</li>
+                        <li><strong>Отправка претензии за вас</strong> (включая все почтовые сборы)</li>
+                        <li><strong>Официальная квитанция</strong> об отправке документов</li>
+                        <li><strong>Информационный звонок</strong> о доставке претензии адресату</li>
+                        <li><strong>Юридическая консультация</strong> по дальнейшим действиям</li>
+                    </ul>
+
+                    <div class="alert alert-warning mt-4">
+                        <h6>ℹ️ Важная информация:</h6>
+                        <p class="mb-2"><strong>Бесплатная отправка уже выполнена!</strong> Ваш PDF-документ уже отправлен вам на почту.</p>
+                        <p class="mb-0">Телефон, который вы указали, нам нужен только для того, чтобы перезвонить и уточнить, нужна ли вам профессиональная проверка. <strong>Вы всегда можете отказаться от проверки</strong> - это никак не повлияет на бесплатную отправку вашего документа.</p>
+                    </div>
+
+                    <div class="text-center mt-4">
+                        <button class="btn btn-custom btn-lg me-3">
+                            💬 Заказать проверку за 999 ₽
+                        </button>
+                        <button class="btn btn-outline-secondary btn-lg">
+                            🆓 Оставить как есть
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Дополнительные действия -->
+                <div class="text-center mt-5">
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-outline-primary">📥 Скачать PDF еще раз</button>
+                        <button class="btn btn-outline-success">🔄 Создать новую претензию</button>
+                        <button class="btn btn-outline-info">📞 Связаться с поддержкой</button>
+                    </div>
+                </div>
+
+                <!-- Информация о поддержке -->
+                <div class="text-center mt-4">
+                    <small class="text-muted">
+                        Если у вас возникли проблемы с получением письма, проверьте папку "Спам" или 
+                        <a href="mailto:support@example.com">свяжитесь с нашей поддержкой</a>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

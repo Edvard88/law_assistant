@@ -29,12 +29,33 @@
             <form method='post' action="{% url 'home' %}" enctype="multipart/form-data">
                 {% csrf_token %}
                 <div class="form-group">
-                    <label>Опишите вашу проблему:</label>
+                    {% comment %} <label class="mb-3">Опишите вашу проблему:</label> {% endcomment %}
+                    
+                    <!-- Добавленный текст -->
+                    <div class="alert alert-info mb-4">
+                        <p class="mb-3"><strong>1. Опишите вашу претензию на обычном языке</strong> - мы преобразуем её в профессиональный юридический текст</p>
+                        
+                        <p class="mb-2"><strong>2. Обязательно укажите в описании:</strong></p>
+                        <ul class="mb-3">
+                            <li>Ваши ФИО (для юр.лица - ИНН и ОГРН)</li>
+                            <li>Ваш почтовый адрес</li>
+                            <li>Ваш телефон и e-mail</li>
+                        </ul>
+                        
+                        <p class="mb-2"><strong>3. Если известны, также укажите данные кому адресована претензия:</strong></p>
+                        <ul class="mb-0">
+                            <li>ФИО или название организации-адресата</li>
+                            <li>Их почтовый адрес</li>
+                            <li>Их телефон и e-mail (при наличии)</li>
+                            <li>ИНН и ОГРН организации (если известны)</li>
+                        </ul>
+                    </div>
+
                     {{ form.title }}
                 </div>
                 
                 {% if current_step == 1 %}
-                <button type='submit' class='btn btn-success'>Продолжить</button>
+                <button type='submit' class='btn btn-success mt-3'>Продолжить</button>
                 {% endif %}
                 
                 <span class="text-danger">{{ error }}</span>
@@ -190,7 +211,7 @@
 
 
 
-<!-- Модальное окно для ввода email -->
+<!-- Модальное окно для ввода email и телефона -->
 <div class="modal fade" id="emailModal" tabindex="-1" aria-labelledby="emailModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -210,6 +231,11 @@
                         <input type="email" class="form-control" id="user_email" name="user_email" required 
                                placeholder="example@mail.ru">
                     </div>
+                    <div class="mb-3">
+                        <label for="user_tel" class="form-label">Ваш телефон:</label>
+                        <input type="tel" class="form-control" id="user_tel" name="user_tel" required 
+                               placeholder="+7 (XXX) XXX-XX-XX">
+                    </div>
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="user_agreement" name="user_agreement" required>
                         <label class="form-check-label" for="user_agreement">
@@ -219,7 +245,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                    <button type="submit" class="btn btn-primary">Отправить на почту</button>
+                    <button type="submit" class="btn btn-primary">Отправить</button>
                 </div>
             </form>
         </div>
@@ -258,3 +284,62 @@
     {% endif %}
 
 {% endblock %}
+
+
+
+
+{% comment %} <!-- Модальное окно для ввода email и телефона -->
+<div class="modal fade" id="emailModal" tabindex="-1" aria-labelledby="emailModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'send_pdf_email' %}" id="emailForm">
+                {% csrf_token %}
+                <input type="hidden" name="title" value="{{ form.title.value }}">
+                <input type="hidden" name="generated_issue" value="{{ form.generated_issue.value }}">
+                <input type="hidden" name="signature" value="{{ form.signature.value }}">
+                
+                <div class="modal-header">
+                    <h5 class="modal-title" id="emailModalLabel">Отправка PDF на почту</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Добавленный текст -->
+                    <div class="alert alert-info mb-4">
+                        <p class="mb-2"><strong>Мы отправим вам PDF сгенерированной претензии абсолютно БЕСПЛАТНО!</strong> Ни о чем не волнуйтесь - ваш документ уже готов.</p>
+                        
+                        <p class="mb-2">Также у вас есть возможность <strong>всего за 999 рублей</strong> получить профессиональную проверку вашей претензии юристом. В эту стоимость уже включены:</p>
+                        <ul class="small mb-2">
+                            <li>Профессиональная проверка текста юристом</li>
+                            <li>Отправка претензии за вас (включая почтовые сборы)</li>
+                            <li>Квитанция об отправке</li>
+                            <li>Информационный звонок о доставке претензии</li>
+                        </ul>
+                        
+                        <p class="mb-0">Заполните email и телефон ниже - это необходимо для бесплатной отправки вашей претензии. Телефон нам нужен, чтобы перезвонить и уточнить, нужна ли вам профессиональная проверка. <strong>Вы всегда можете отказаться от проверки</strong> - это никак не повлияет на бесплатную отправку вашего документа.</p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="user_email" class="form-label">Ваш email адрес:</label>
+                        <input type="email" class="form-control" id="user_email" name="user_email" required 
+                               placeholder="example@mail.ru">
+                    </div>
+                    <div class="mb-3">
+                        <label for="user_tel" class="form-label">Ваш телефон:</label>
+                        <input type="tel" class="form-control" id="user_tel" name="user_tel" required 
+                               placeholder="+7 (XXX) XXX-XX-XX">
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="user_agreement" name="user_agreement" required>
+                        <label class="form-check-label" for="user_agreement">
+                            Я согласен с <a href="#" data-bs-toggle="modal" data-bs-target="#agreementModal">пользовательским соглашением</a>
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Получить PDF бесплатно</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div> {% endcomment %}
