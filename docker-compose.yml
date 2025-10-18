@@ -4,11 +4,13 @@ services:
       context: ./${DJANGO_DOCKERFILE}
       dockerfile: Dockerfile
     container_name: django_pytemp
+    # Добавить команду source/bin/activate
     command: >
       bash -c "
-      python manage.py migrate &&
-      python manage.py runserver 0.0.0.0:8001
+      python3 manage.py migrate &&
+      python3 manage.py runserver 0.0.0.0:8001
       "
+      
     volumes:
       - ./${DJANGO_DOCKERFILE}/${DJANGO_PROJECT}:/usr/src/app
     ports:
