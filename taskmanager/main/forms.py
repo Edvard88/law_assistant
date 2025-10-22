@@ -2,7 +2,7 @@ from django.forms import ModelForm, TextInput, Textarea, CharField
 from signature_pad import SignaturePadWidget
 from ckeditor.widgets import CKEditorWidget
 
-from .models import LawIssue
+from .models import LawIssue, BusinessClient
 
 
 class LawIssueForm(ModelForm):
@@ -41,4 +41,42 @@ class LawIssueForm(ModelForm):
             })
    }
         
+
+class BusinessClientForm(ModelForm):
+    class Meta:
+        model = BusinessClient
+        fields = [
+            'client_name', 
+            # 'client_inn', 'client_ogrn', 'client_address',
+            # 'client_email', 'client_phone', 
+            'charges_file', 
+            'personal_data_claim_file', 'snt_claim_file'
+        ]
+        widgets = {
+            'client_name': TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'ООО "Ромашка"'
+            # }),
+            # 'client_inn': TextInput(attrs={
+            #     'class': 'form-control',
+            #     'placeholder': '1234567890'
+            # }),
+            # 'client_ogrn': TextInput(attrs={
+            #     'class': 'form-control',
+            #     'placeholder': '1234567890123'
+            # }),
+            # 'client_address': Textarea(attrs={
+            #     'class': 'form-control',
+            #     'placeholder': 'г. Москва, ул. Ленина, д. 1',
+            #     'rows': 3
+            # }),
+            # 'client_email': TextInput(attrs={
+            #     'class': 'form-control',
+            #     'placeholder': 'example@company.ru'
+            # }),
+            # 'client_phone': TextInput(attrs={
+            #     'class': 'form-control',
+            #     'placeholder': '+7 (XXX) XXX-XX-XX'
+            }),
+        }
 

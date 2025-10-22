@@ -23,6 +23,18 @@ from django.template.loader import render_to_string
 from django.template.loader import get_template
 from xhtml2pdf import pisa
 
+import pandas as pd
+import zipfile
+import tempfile
+import os
+from django.core.files.storage import FileSystemStorage
+from django.http import HttpResponse
+from django.shortcuts import render, redirect
+
+import pandas as pd
+import os
+from datetime import datetime
+
 
 import logging
 # Настройка логгера
@@ -614,3 +626,463 @@ def download_pdf_only(request):
             return HttpResponse('Ошибка сохранения PDF файлов')
     
     return redirect('home')
+
+
+#############
+from .llm_model import business_model_predict #, process_business_files_fallback
+import json
+from django.core.files.base import ContentFile
+
+
+
+def ensure_business_directory():
+    """Создает директорию для бизнес-данных если не существует"""
+    business_dir = os.path.join("data", "business")
+    ensure_directory_exists(business_dir)
+    return business_dir
+
+def get_existing_debtors_csv_path():
+    """Возвращает путь к CSV файлу с историей должников"""
+    business_dir = ensure_business_directory()
+    return os.path.join(business_dir, "debtors_history.csv")
+
+
+def append_debtors_to_csv(claims_data):
+    """Добавляет должников в CSV файл только с полными данными"""
+    try:
+        csv_path = get_existing_debtors_csv_path()
+        
+        # Инициализируем CSV если не существует или пустой
+        init_debtors_csv()
+        
+        # Подготавливаем данные для CSV
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        
+        csv_data = []
+        for claim in claims_data:
+            # ВАЖНО: claims_data уже должна содержать только тех, у кого has_personal_data = True
+            # но на всякий случай проверяем еще раз
+            if not claim.get('has_personal_data', False):
+                continue
+                
+            fio = claim.get('fio', '')
+            snt_address = claim.get('snt_address', '')
+            debt = claim.get('debt_amount', 0)
+            
+            # Дополнительная проверка на заполнители
+            if (fio == '_________________________' or 
+                snt_address == '_________________________' or
+                not fio or not snt_address or
+                debt <= 60000):
+                continue
+                
+            # Используем правильные названия колонок
+            csv_data.append({
+                'дата': current_date,
+                'контрагенты': fio,
+                'дом_участок_в_СНТ': snt_address,
+                'долг': debt
+            })
+        
+        if not csv_data:
+            print("ℹ️ Нет данных для добавления в CSV")
+            return False
+        
+        # Создаем DataFrame
+        df_new = pd.DataFrame(csv_data)
+        
+        # Читаем существующие данные
+        df_existing = pd.read_csv(csv_path)
+        
+        # Объединяем, убирая дубликаты по контрагентам и участку
+        df_combined = pd.concat([df_existing, df_new]).drop_duplicates(
+            subset=['контрагенты', 'дом_участок_в_СНТ'], 
+            keep='last'
+        )
+        
+        # Сохраняем обратно
+        df_combined.to_csv(csv_path, index=False, encoding='utf-8')
+        print(f"✅ В CSV добавлено {len(df_new)} должников с полными данными")
+        print(f"📁 Всего записей в CSV: {len(df_combined)}")
+        
+        # Выводим отладочную информацию о добавленных записях
+        for _, row in df_new.iterrows():
+            print(f"   📝 Добавлен: {row['контрагенты']} | {row['дом_участок_в_СНТ']} | {row['долг']} руб.")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Ошибка при записи в CSV: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def init_debtors_csv():
+    """Инициализирует CSV файл если он не существует"""
+    csv_path = get_existing_debtors_csv_path()
+    if not os.path.exists(csv_path):
+        # Создаем пустой CSV с правильными заголовками
+        df = pd.DataFrame(columns=['дата', 'контрагенты', 'дом_участок_в_СНТ', 'долг'])
+        df.to_csv(csv_path, index=False, encoding='utf-8')
+        print(f"✅ Создан новый CSV файл: {csv_path}")
+
+def get_previously_contacted_debtors():
+    """Возвращает список должников, которым уже отправлялись претензии"""
+    try:
+        csv_path = get_existing_debtors_csv_path()
+        
+        if not os.path.exists(csv_path):
+            return []
+        
+        df = pd.read_csv(csv_path)
+        
+        # Возвращаем список с новыми названиями колонок
+        contacted_debtors = []
+        for _, row in df.iterrows():
+            contacted_debtors.append({
+                'contractor': row.get('контрагенты', ''),
+                'snt_address': row.get('дом_участок_в_СНТ', ''),
+                'date_added': row.get('дата', ''),
+                'debt_amount': row.get('долг', 0)
+            })
+        
+        print(f"📋 Прочитано из CSV: {len(contacted_debtors)} записей")
+        return contacted_debtors
+        
+    except Exception as e:
+        print(f"❌ Ошибка чтения CSV: {e}")
+        return []
+        
+    except Exception as e:
+        print(f"Ошибка чтения CSV: {e}")
+        return []
+
+def is_debtor_previously_contacted(fio, snt_address):
+    """Проверяет, отправлялась ли претензия этому должнику ранее"""
+    contacted_debtors = get_previously_contacted_debtors()
+    
+    for debtor in contacted_debtors:
+        if (debtor['contractor'] == fio and 
+            debtor['snt_address'] == snt_address):
+            print(f"✅ Найден в истории: {fio} | {snt_address}")
+            return True
+    
+    print(f"❌ Не найден в истории: {fio} | {snt_address}")
+    return False
+
+
+def business_dashboard(request):
+    """Главная страница для бизнеса"""
+    return render(request, 'main/business_dashboard.html')
+
+def process_business_files(request):
+    """Обработка загруженных файлов и генерация претензий через локальную обработку"""
+    if request.method == 'POST' and request.FILES:
+        uploaded_files = request.FILES.getlist('files')
+        
+        # Временное хранение файлов
+        temp_files = {}
+        fs = FileSystemStorage(location=tempfile.gettempdir())
+        
+        try:
+            # Сохраняем файлы временно
+            for file in uploaded_files:
+                filename = fs.save(f"business_temp_{file.name}", file)
+                temp_files[file.name] = fs.path(filename)
+            
+            # Обрабатываем файлы через ЛОКАЛЬНУЮ обработку
+            claims_data = business_model_predict(temp_files, None)
+            
+            # Получаем список ранее оповещенных должников
+            previously_contacted = get_previously_contacted_debtors()
+            
+            # ИЗМЕНЕНИЕ: ФИЛЬТРУЕМ ТОЛЬКО ПО ДОЛГУ > 60,000
+            all_debtors_over_60k = []
+            already_contacted_claims = []
+            
+            for claim in claims_data:
+                debt = claim.get('debt_amount', 0)
+                
+                # ВАЖНО: фильтруем только по долгу
+                if debt > 60000:
+                    fio = claim.get('fio', '')
+                    snt_address = claim.get('snt_address', '')
+                    
+                    if is_debtor_previously_contacted(fio, snt_address):
+                        # Добавляем дату из CSV
+                        contacted_date = None
+                        for contacted in previously_contacted:
+                            if (contacted['contractor'] == fio and 
+                                contacted['snt_address'] == snt_address):
+                                contacted_date = contacted['date_added']
+                                break
+                        
+                        claim_with_date = claim.copy()
+                        claim_with_date['date_contacted'] = contacted_date
+                        already_contacted_claims.append(claim_with_date)
+                    else:
+                        all_debtors_over_60k.append(claim)
+            
+            print(f"🔍 Отладочная информация:")
+            print(f"   Всего claims_data: {len(claims_data)}")
+            print(f"   С долгом > 60k: {len(all_debtors_over_60k)}")
+            print(f"   Уже в истории: {len(already_contacted_claims)}")
+            
+            # Генерируем PDF файлы только для новых должников с полными данными
+            generated_pdfs = []
+            for claim in all_debtors_over_60k:
+                # ИЗМЕНЕНИЕ: генерируем PDF только если есть персональные данные
+                if claim.get('has_personal_data', False):
+                    pdf_result = generate_single_business_pdf(claim, None)
+                    if pdf_result:
+                        generated_pdfs.append(pdf_result)
+            
+            # Создаем ZIP архив
+            zip_buffer = create_business_zip_archive(generated_pdfs)
+            
+            # Сохраняем в сессии
+            request.session['business_zip'] = zip_buffer.getvalue().decode('latin-1')
+            request.session['generated_count'] = len(generated_pdfs)
+            request.session['total_claims'] = len(claims_data)
+            request.session['filtered_claims'] = len(all_debtors_over_60k)  # Все с долгом > 60k
+            request.session['claims_data'] = all_debtors_over_60k  # ВСЕ должники с долгом > 60k
+            request.session['all_claims_data'] = all_debtors_over_60k  # Для CSV - только те, у кого есть данные
+            request.session['already_contacted_claims'] = already_contacted_claims
+            
+            context = {
+                'generated_count': len(generated_pdfs),
+                'total_claims': len(claims_data),
+                'filtered_claims': len(all_debtors_over_60k),  # Все с долгом > 60k
+                'claims_data': all_debtors_over_60k,  # ВСЕ должники с долгом > 60k
+                'already_contacted_claims': already_contacted_claims,
+                'has_zip': len(generated_pdfs) > 0
+            }
+            
+            return render(request, 'main/process_business_files.html', context)
+            
+        except Exception as e:
+            # Очистка временных файлов в случае ошибки
+            for filepath in temp_files.values():
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            
+            return HttpResponse(f'Ошибка обработки файлов: {str(e)}')
+        
+        finally:
+            # Всегда очищаем временные файлы
+            for filepath in temp_files.values():
+                if os.path.exists(filepath):
+                    try:
+                        os.remove(filepath)
+                    except:
+                        pass
+    
+    return redirect('business')
+
+def generate_business_claims(request):
+    """Генерация претензий для бизнеса"""
+    if request.method == 'POST':
+        claims_data = request.session.get('business_claims_data', [])
+        template_content = request.session.get('business_template')
+        
+        if not claims_data:
+            return HttpResponse('Нет данных для генерации')
+        
+        # Фильтруем только тех, у кого есть долг и нет существующей претензии
+        valid_claims = []
+        for claim in claims_data:
+            if claim.get('debt_amount', 0) > 0:
+                # Проверяем БД на существующую претензию
+                if not BusinessClaim.objects.filter(fio=claim['fio'], is_generated=True).exists():
+                    valid_claims.append(claim)
+        
+        # Генерируем PDF файлы
+        generated_files = []
+        for claim in valid_claims:
+            pdf_content = generate_single_business_pdf(claim, template_content)
+            if pdf_content:
+                # Сохраняем в БД
+                business_claim = BusinessClaim(
+                    fio=claim['fio'],
+                    address=claim['address'],
+                    snt_address=claim['snt_address'],
+                    kadastr_number=claim['kadastr_number'],
+                    email=claim['email'],
+                    phone=claim['phone'],
+                    debt_amount=claim['debt_amount'],
+                    is_generated=True
+                )
+                
+                filename = f"претензия_{claim['fio'].replace(' ', '_')}.pdf"
+                business_claim.generated_pdf.save(filename, ContentFile(pdf_content))
+                business_claim.save()
+                
+                generated_files.append({
+                    'filename': filename,
+                    'content': pdf_content,
+                    'claim': claim
+                })
+        
+        # Создаем ZIP архив
+        zip_buffer = create_business_zip_archive(generated_files)
+        
+        # Сохраняем ZIP в сессии
+        request.session['business_zip'] = zip_buffer.getvalue().decode('latin-1')
+        request.session['generated_count'] = len(generated_files)
+        
+        context = {
+            'generated_count': len(generated_files),
+            'skipped_count': len(claims_data) - len(generated_files),
+            'claims_data': valid_claims
+        }
+        
+        return render(request, 'main/generate_business_claims.html', context)
+    
+    return redirect('process_business_files')
+
+def generate_single_business_pdf(claim_data, template_content=None):
+    """Генерация одного PDF файла по шаблону СНТ с участком в названии и содержании"""
+    try:
+        # Если шаблон не передан, используем стандартный из файла
+        if not template_content:
+            template_path = os.path.join(os.path.dirname(__file__), 'templates', 'main', 'issue_snt.html')
+            with open(template_path, 'r', encoding='utf-8') as f:
+                template_content = f.read()
+        
+        # Получаем данные участка для использования в PDF
+        snt_address = claim_data.get('snt_address', '')
+        fio = claim_data.get('fio', '')
+        
+        # Создаем понятное название файла с участком
+        address_clean = snt_address.replace(' ', '_').replace(',', '').replace('.', '')
+        filename_safe = f"{fio.replace(' ', '_')}_{address_clean}" if snt_address else f"{fio.replace(' ', '_')}"
+        
+        # Подготавливаем контекст с участком
+        context = {
+            'ФИО': fio,
+            'Адрес проживания': claim_data.get('address', '_________________________'),
+            'Адрес СНТ': snt_address,  # Обязательно включаем участок
+            'кадастровый номер': claim_data.get('kadastr_number', '_________________________'),
+            'Эл. почта': claim_data.get('email', '_________________________'),
+            'Телефон': claim_data.get('phone', '_________________________'),
+            'долг': f"{claim_data.get('debt_amount', 0):,.2f}",
+            'Номер договора': claim_data.get('contract_number', '_________________________'),
+            # Добавляем отдельные поля для гибкости в шаблоне
+            'fio': fio,
+            'address': claim_data.get('address', '_________________________'),
+            'snt_address': snt_address,
+            'debt_amount': f"{claim_data.get('debt_amount', 0):,.2f}",
+            'debt_amount_raw': claim_data.get('debt_amount', 0)
+        }
+        
+        # Заменяем плейсхолдеры в шаблоне
+        html_content = template_content
+        for key, value in context.items():
+            placeholder = f'{{{key}}}'
+            html_content = html_content.replace(placeholder, str(value))
+        
+        # Дополнительная замена для старых шаблонов
+        html_content = html_content.replace('{участок}', snt_address)
+        html_content = html_content.replace('{Участок}', snt_address)
+        html_content = html_content.replace('{адрес_снт}', snt_address)
+        html_content = html_content.replace('{Адрес СНТ}', snt_address)
+        
+        # Генерируем PDF
+        pdf_file = generate_pdf_weasyprint(html_content)
+        
+        if pdf_file:
+            return {
+                'filename': f"претензия_{filename_safe}.pdf",
+                'content': pdf_file.getvalue(),
+                'claim': claim_data
+            }
+        
+        return None
+        
+    except Exception as e:
+        print(f"Ошибка генерации PDF для {claim_data.get('fio', 'unknown')}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+        
+
+def create_business_zip_archive(generated_files):
+    """Создание ZIP архива с PDF файлами с правильными названиями"""
+    zip_buffer = io.BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for file_data in generated_files:
+            zip_file.writestr(file_data['filename'], file_data['content'])
+    
+    zip_buffer.seek(0)
+    return zip_buffer
+
+def download_business_zip(request):
+    """Скачивание ZIP архива с претензиями и сохранение в CSV только при скачивании"""
+    zip_content = request.session.get('business_zip', '')
+    all_claims_data = request.session.get('all_claims_data', [])  # Это уже отфильтрованные данные!
+    
+    if not zip_content:
+        return HttpResponse('Файл не найден')
+    
+    # Сохраняем в CSV ТОЛЬКО при нажатии на скачивание
+    if all_claims_data:
+        print(f"💾 Сохраняем в CSV при скачивании: {len(all_claims_data)} записей")
+        success = append_debtors_to_csv(all_claims_data)
+        if success:
+            print("✅ Данные успешно сохранены в CSV")
+        else:
+            print("❌ Ошибка сохранения в CSV")
+    
+    # Декодируем обратно из latin-1
+    zip_bytes = zip_content.encode('latin-1')
+    
+    response = HttpResponse(zip_bytes, content_type='application/zip')
+    response['Content-Disposition'] = 'attachment; filename="business_claims.zip"'
+    
+    # Очищаем сессию после скачивания
+    if 'business_zip' in request.session:
+        del request.session['business_zip']
+    if 'all_claims_data' in request.session:
+        del request.session['all_claims_data']
+    
+    return response
+
+def send_business_emails(request):
+    """Отправка писем с претензиями"""
+    if request.method == 'POST':
+        zip_content = request.session.get('business_zip', '')
+        generated_count = request.session.get('generated_count', 0)
+        
+        if not zip_content:
+            return HttpResponse('Нет данных для отправки')
+        
+        try:
+            # Декодируем ZIP
+            zip_bytes = zip_content.encode('latin-1')
+            
+            # Создаем письмо
+            subject = f'Сгенерированные претензии для СНТ ({generated_count} шт.)'
+            body = f"""
+            Во вложении архив с {generated_count} сгенерированными претензиями.
+            
+            Сгенерировано: {datetime.now().strftime("%Y-%m-%d %H:%M")}
+            """
+            
+            email = EmailMessage(
+                subject=subject,
+                body=body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=['edvard88@inbox.ru'],
+            )
+            
+            # Прикрепляем ZIP архив
+            email.attach('business_claims.zip', zip_bytes, 'application/zip')
+            email.send()
+            
+            return HttpResponse(f'Письма отправлены успешно на 2 адреса: edvard88@inbox.ru, 89036414195@mail.ru')
+            
+        except Exception as e:
+            return HttpResponse(f'Ошибка отправки писем: {str(e)}')
+    
+    return redirect('generate_business_claims')

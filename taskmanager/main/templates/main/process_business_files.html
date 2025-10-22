@@ -1,0 +1,928 @@
+{% extends 'main/base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2>Результаты обработки</h2>
+    
+    <!-- СВОДНАЯ ИНФОРМАЦИЯ С КРАСИВЫМ ДИЗАЙНОМ -->
+    <div class="alert alert-info border-0 shadow-sm">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h5 class="mb-3">📊 Статистика обработки</h5>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-number">{{ total_claims }}</div>
+                        <div class="stat-label">Всего найдено</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">{{ filtered_claims }}</div>
+                        <div class="stat-label">Долг > 60,000 руб.</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">{{ generated_count }}</div>
+                        <div class="stat-label">Сгенерировано</div>
+                    </div>
+                </div>
+            </div>
+            <div class="text-end">
+                <span class="badge bg-primary fs-6">AI Analysis</span>
+            </div>
+        </div>
+        
+        {% if filtered_claims > 0 %}
+        <div class="mt-4">
+            <h6 class="d-flex align-items-center mb-3">
+                <span class="debt-icon">💰</span>
+                Должники с задолженностью > 60,000 руб.
+            </h6>
+            <div class="debtors-list-container">
+                <div class="debtors-list">
+                    {% for claim in claims_data %}
+                        <div class="debtor-item {% if not claim.has_personal_data %}no-data{% endif %}">
+                            <div class="debtor-main">
+                                <span class="debtor-name">{{ claim.fio }}</span>
+                                <span class="debtor-address">{{ claim.snt_address }}</span>
+                            </div>
+                            <div class="debtor-details">
+                                <span class="debt-amount">{{ claim.debt_amount|floatformat:2 }} руб.</span>
+                                {% if not claim.has_personal_data %}
+                                <span class="badge no-data-badge">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    Нет данных
+                                </span>
+                                {% else %}
+                                <span class="badge has-data-badge">
+                                    <i class="bi bi-check-circle"></i>
+                                    Данные есть
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="scroll-hint">
+                    <i class="bi bi-chevron-double-down"></i>
+                    <span>Прокрутите для просмотра</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Остальной код остается без изменений -->
+    <!-- ДОЛЖНИКИ, КОТОРЫМ УЖЕ ОТПРАВЛЯЛИ ПРЕТЕНЗИИ -->
+    {% if already_contacted_claims and already_contacted_claims|length > 0 %}
+    <div class="alert alert-warning mt-4 border-0 shadow-sm">
+        <h5 class="d-flex align-items-center">
+            <i class="bi bi-clock-history me-2"></i>
+            Должники, которым ранее претензия уже была отправлена
+        </h5>
+        <p class="mb-3 text-muted">Этим должникам не нужно отправлять досудебное уведомление повторно.</p>
+        
+        <div class="table-responsive">
+            <table class="table table-sm table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>ФИО</th>
+                        <th>Участок</th>
+                        <th>Долг</th>
+                        <th>Дата добавления</th>
+                        <th>Статус</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for claim in already_contacted_claims %}
+                    <tr>
+                        <td><strong>{{ claim.fio }}</strong></td>
+                        <td>{{ claim.snt_address }}</td>
+                        <td><strong>{{ claim.debt_amount|floatformat:2 }} руб.</strong></td>
+                        <td>{{ claim.date_contacted|default:"Неизвестно" }}</td>
+                        <td>
+                            <span class="badge bg-secondary">
+                                <i class="bi bi-envelope-check"></i>
+                                Уже получал претензию
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% comment %} <!-- ДЕТАЛЬНАЯ ИНФОРМАЦИЯ ПО НОВЫМ ДОЛЖНИКАМ -->
+    {% if claims_data and claims_data|length > 0 %}
+    <div class="card mt-4 border-0 shadow-sm">
+        <div class="card-header bg-light d-flex align-items-center">
+            <i class="bi bi-table me-2"></i>
+            <h5 class="card-title mb-0">Детальная информация по новым должникам</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ФИО</th>
+                            <th>Участок</th>
+                            <th>Адрес</th>
+                            <th>Долг</th>
+                            <th>Email</th>
+                            <th>Телефон</th>
+                            <th>Номер договора</th>
+                            <th>Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for claim in claims_data %}
+                        <tr>
+                            <td><strong>{{ claim.fio }}</strong></td>
+                            <td>{{ claim.snt_address }}</td>
+                            <td>
+                                {% if claim.address != '_________________________' %}
+                                    {{ claim.address }}
+                                {% else %}
+                                    <span class="text-muted fst-italic">Не указан</span>
+                                {% endif %}
+                            </td>
+                            <td><strong class="text-danger">{{ claim.debt_amount|floatformat:2 }} руб.</strong></td>
+                            <td>
+                                {% if claim.email != '_________________________' %}
+                                    <span class="text-primary">{{ claim.email }}</span>
+                                {% else %}
+                                    <span class="text-muted fst-italic">Не указан</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if claim.phone != '_________________________' %}
+                                    <span class="text-success">{{ claim.phone }}</span>
+                                {% else %}
+                                    <span class="text-muted fst-italic">Не указан</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if claim.contract_number != '_________________________' %}
+                                    <code>{{ claim.contract_number }}</code>
+                                {% else %}
+                                    <span class="text-muted fst-italic">Не указан</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if claim.has_personal_data %}
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-check-lg"></i>
+                                        Готов к генерации
+                                    </span>
+                                    <br><small class="text-success">✓ Попадет в историю</small>
+                                {% else %}
+                                    <span class="badge bg-danger">
+                                        <i class="bi bi-exclamation-triangle"></i>
+                                        Неполные данные
+                                    </span>
+                                    <br><small class="text-danger">✗ Не попадет в историю</small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %} {% endcomment %}
+
+    <!-- КНОПКИ СКАЧИВАНИЯ -->
+    {% if has_zip %}
+    <div class="text-center mt-4">
+        <a href="{% url 'download_business_zip' %}" class="btn btn-success btn-lg shadow">
+            <i class="bi bi-file-earmark-zip"></i>
+            Скачать ZIP архив ({{ generated_count }} претензий)
+        </a>
+        <div class="mt-3">
+            <a href="{% url 'business' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i>
+                Загрузить новые файлы
+            </a>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-warning mt-4 border-0 shadow-sm">
+        {% if total_claims == 0 %}
+        <div class="d-flex align-items-center">
+            <i class="bi bi-search me-3 fs-4"></i>
+            <div>
+                <strong>Не найдено должников в файлах.</strong> Проверьте:
+                <ul class="mt-2 mb-0">
+                    <li>Формат файлов (должны быть Excel)</li>
+                    <li>Структуру файлов (должны содержать колонки с ФИО и долгами)</li>
+                    <li>Кодировку файлов</li>
+                </ul>
+            </div>
+        </div>
+        {% elif filtered_claims == 0 %}
+        <div class="d-flex align-items-center">
+            <i class="bi bi-info-circle me-3 fs-4"></i>
+            <div>
+                <strong>Не найдено новых должников с долгом более 60,000 рублей.</strong>
+                <p class="mb-0 mt-1">Всего найдено {{ total_claims }} должников, но все они уже получали претензии ранее или долг меньше 60,000 руб.</p>
+            </div>
+        </div>
+        {% else %}
+        <div class="d-flex align-items-center">
+            <i class="bi bi-exclamation-triangle me-3 fs-4"></i>
+            <div>
+                <strong>Не удалось сгенерировать претензии.</strong>
+                <p class="mb-0 mt-1">Найдено {{ filtered_claims }} должников с долгом > 60,000 руб., но отсутствуют персональные данные для генерации претензий.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    <div class="text-center">
+        <a href="{% url 'business' %}" class="btn btn-primary">
+            <i class="bi bi-arrow-left"></i>
+            Назад к загрузке файлов
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+/* Современный дизайн статистики */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.stat-item {
+    text-align: center;
+    padding: 15px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.stat-number {
+    font-size: 24px;
+    font-weight: bold;
+    color: #0d6efd;
+    margin-bottom: 5px;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Красивый список должников */
+.debtors-list-container {
+    position: relative;
+    background: white;
+    border-radius: 10px;
+    padding: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.debtors-list {
+    max-height: 650px;
+    overflow-y: auto;
+    padding: 15px;
+}
+
+.debtor-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    margin-bottom: 8px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #28a745;
+    transition: all 0.3s ease;
+}
+
+.debtor-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.debtor-item.no-data {
+    border-left-color: #dc3545;
+    background: #fff5f5;
+}
+
+.debtor-main {
+    flex: 1;
+}
+
+.debtor-name {
+    font-weight: 600;
+    color: #212529;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.debtor-address {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.debtor-details {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.debt-amount {
+    font-weight: bold;
+    color: #dc3545;
+    font-size: 14px;
+}
+
+.no-data-badge {
+    background: #dc3545;
+    color: white;
+}
+
+.has-data-badge {
+    background: #28a745;
+    color: white;
+}
+
+/* Иконки и декоративные элементы */
+.debt-icon {
+    font-size: 18px;
+    margin-right: 8px;
+}
+
+.debtors-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.debtors-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.debtors-list::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.debtors-list::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+.scroll-hint {
+    text-align: center;
+    padding: 10px;
+    background: linear-gradient(transparent, #f8f9fa);
+    border-top: 1px solid #dee2e6;
+    animation: pulse 2s infinite;
+}
+
+.scroll-hint i {
+    display: block;
+    font-size: 16px;
+    margin-bottom: 5px;
+}
+
+.scroll-hint span {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+}
+
+/* Общие улучшения */
+.alert {
+    border-radius: 12px;
+}
+
+.card {
+    border-radius: 12px;
+}
+
+.table th {
+    font-weight: 600;
+    background: #f8f9fa;
+}
+
+.badge {
+    font-weight: 500;
+}
+
+.btn {
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .debtor-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .debtor-details {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .stat-number {
+        font-size: 20px;
+    }
+}
+</style>
+
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+{% endblock %}
+
+<!-- Отладочная информация -->
+<div class="alert alert-secondary mt-3">
+    <small>
+        <strong>Отладочная информация:</strong><br>
+        - Всего обработано: {{ total_claims }}<br>
+        - С персональными данными и долгом > 60k: {{ filtered_claims }}<br>
+        - Уже в истории: {{ already_contacted_claims|length }}<br>
+        - Будет сгенерировано PDF: {{ generated_count }}<br>
+        - Попадут в CSV при скачивании: {{ filtered_claims }}
+    </small>
+</div>
+
+
+{% comment %} 
+
+{% extends 'main/base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2>Результаты обработки</h2>
+    
+    <!-- СВОДНАЯ ИНФОРМАЦИЯ С КРАСИВЫМ ДИЗАЙНОМ -->
+    <div class="alert alert-info border-0 shadow-sm">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h5 class="mb-3">📊 Статистика обработки</h5>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-number">{{ total_claims }}</div>
+                        <div class="stat-label">Всего найдено</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">{{ filtered_claims }}</div>
+                        <div class="stat-label">Долг > 60,000 руб.</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">{{ generated_count }}</div>
+                        <div class="stat-label">Сгенерировано</div>
+                    </div>
+                </div>
+            </div>
+            <div class="text-end">
+                <span class="badge bg-primary fs-6">AI Analysis</span>
+            </div>
+        </div>
+        
+        {% if filtered_claims > 0 %}
+        <div class="mt-4">
+            <h6 class="d-flex align-items-center mb-3">
+                <span class="debt-icon">💰</span>
+                Должники с задолженностью > 60,000 руб.
+            </h6>
+            <div class="debtors-list-container">
+                <div class="debtors-list">
+                    {% for claim in claims_data %}
+                        <div class="debtor-item {% if not claim.has_personal_data %}no-data{% endif %}">
+                            <div class="debtor-main">
+                                <span class="debtor-name">{{ claim.fio }}</span>
+                                <span class="debtor-address">{{ claim.snt_address }}</span>
+                            </div>
+                            <div class="debtor-details">
+                                <span class="debt-amount">{{ claim.debt_amount|floatformat:2 }} руб.</span>
+                                {% if not claim.has_personal_data %}
+                                <span class="badge no-data-badge">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    Нет данных
+                                </span>
+                                {% else %}
+                                <span class="badge has-data-badge">
+                                    <i class="bi bi-check-circle"></i>
+                                    Данные есть
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="scroll-hint">
+                    <i class="bi bi-chevron-double-down"></i>
+                    <span>Прокрутите для просмотра</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Остальной код остается без изменений -->
+    <!-- ДОЛЖНИКИ, КОТОРЫМ УЖЕ ОТПРАВЛЯЛИ ПРЕТЕНЗИИ -->
+    {% if already_contacted_claims and already_contacted_claims|length > 0 %}
+    <div class="alert alert-warning mt-4 border-0 shadow-sm">
+        <h5 class="d-flex align-items-center">
+            <i class="bi bi-clock-history me-2"></i>
+            Должники, которым ранее претензия уже была отправлена
+        </h5>
+        <p class="mb-3 text-muted">Этим должникам не нужно отправлять досудебное уведомление повторно.</p>
+        
+        <div class="table-responsive">
+            <table class="table table-sm table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>ФИО</th>
+                        <th>Участок</th>
+                        <th>Долг</th>
+                        <th>Дата добавления</th>
+                        <th>Статус</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for claim in already_contacted_claims %}
+                    <tr>
+                        <td><strong>{{ claim.fio }}</strong></td>
+                        <td>{{ claim.snt_address }}</td>
+                        <td><strong>{{ claim.debt_amount|floatformat:2 }} руб.</strong></td>
+                        <td>{{ claim.date_contacted|default:"Неизвестно" }}</td>
+                        <td>
+                            <span class="badge bg-secondary">
+                                <i class="bi bi-envelope-check"></i>
+                                Уже получал претензию
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ДЕТАЛЬНАЯ ИНФОРМАЦИЯ ПО НОВЫМ ДОЛЖНИКАМ -->
+    {% if claims_data and claims_data|length > 0 %}
+    <div class="card mt-4 border-0 shadow-sm">
+        <div class="card-header bg-light d-flex align-items-center">
+            <i class="bi bi-table me-2"></i>
+            <h5 class="card-title mb-0">Детальная информация по новым должникам</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ФИО</th>
+                            <th>Участок</th>
+                            <th>Адрес</th>
+                            <th>Долг</th>
+                            <th>Email</th>
+                            <th>Телефон</th>
+                            <th>Номер договора</th>
+                            <th>Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for claim in claims_data %}
+                        <tr>
+                            <td><strong>{{ claim.fio }}</strong></td>
+                            <td>{{ claim.snt_address }}</td>
+                            <td>
+                                {% if claim.address != '_________________________' %}
+                                    {{ claim.address }}
+                                {% else %}
+                                    <span class="text-muted fst-italic">Не указан</span>
+                                {% endif %}
+                            </td>
+                            <td><strong class="text-danger">{{ claim.debt_amount|floatformat:2 }} руб.</strong></td>
+                            <td>
+                                {% if claim.email != '_________________________' %}
+                                    <span class="text-primary">{{ claim.email }}</span>
+                                {% else %}
+                                    <span class="text-muted fst-italic">Не указан</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if claim.phone != '_________________________' %}
+                                    <span class="text-success">{{ claim.phone }}</span>
+                                {% else %}
+                                    <span class="text-muted fst-italic">Не указан</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if claim.contract_number != '_________________________' %}
+                                    <code>{{ claim.contract_number }}</code>
+                                {% else %}
+                                    <span class="text-muted fst-italic">Не указан</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if claim.has_personal_data %}
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-check-lg"></i>
+                                        Готов к генерации
+                                    </span>
+                                    <br><small class="text-success">✓ Попадет в историю</small>
+                                {% else %}
+                                    <span class="badge bg-danger">
+                                        <i class="bi bi-exclamation-triangle"></i>
+                                        Неполные данные
+                                    </span>
+                                    <br><small class="text-danger">✗ Не попадет в историю</small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- КНОПКИ СКАЧИВАНИЯ -->
+    {% if has_zip %}
+    <div class="text-center mt-4">
+        <a href="{% url 'download_business_zip' %}" class="btn btn-success btn-lg shadow">
+            <i class="bi bi-file-earmark-zip"></i>
+            Скачать ZIP архив ({{ generated_count }} претензий)
+        </a>
+        <div class="mt-3">
+            <a href="{% url 'business' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i>
+                Загрузить новые файлы
+            </a>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-warning mt-4 border-0 shadow-sm">
+        {% if total_claims == 0 %}
+        <div class="d-flex align-items-center">
+            <i class="bi bi-search me-3 fs-4"></i>
+            <div>
+                <strong>Не найдено должников в файлах.</strong> Проверьте:
+                <ul class="mt-2 mb-0">
+                    <li>Формат файлов (должны быть Excel)</li>
+                    <li>Структуру файлов (должны содержать колонки с ФИО и долгами)</li>
+                    <li>Кодировку файлов</li>
+                </ul>
+            </div>
+        </div>
+        {% elif filtered_claims == 0 %}
+        <div class="d-flex align-items-center">
+            <i class="bi bi-info-circle me-3 fs-4"></i>
+            <div>
+                <strong>Не найдено новых должников с долгом более 60,000 рублей.</strong>
+                <p class="mb-0 mt-1">Всего найдено {{ total_claims }} должников, но все они уже получали претензии ранее или долг меньше 60,000 руб.</p>
+            </div>
+        </div>
+        {% else %}
+        <div class="d-flex align-items-center">
+            <i class="bi bi-exclamation-triangle me-3 fs-4"></i>
+            <div>
+                <strong>Не удалось сгенерировать претензии.</strong>
+                <p class="mb-0 mt-1">Найдено {{ filtered_claims }} должников с долгом > 60,000 руб., но отсутствуют персональные данные для генерации претензий.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    <div class="text-center">
+        <a href="{% url 'business' %}" class="btn btn-primary">
+            <i class="bi bi-arrow-left"></i>
+            Назад к загрузке файлов
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+/* Современный дизайн статистики */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.stat-item {
+    text-align: center;
+    padding: 15px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.stat-number {
+    font-size: 24px;
+    font-weight: bold;
+    color: #0d6efd;
+    margin-bottom: 5px;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Красивый список должников */
+.debtors-list-container {
+    position: relative;
+    background: white;
+    border-radius: 10px;
+    padding: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.debtors-list {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 15px;
+}
+
+.debtor-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    margin-bottom: 8px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #28a745;
+    transition: all 0.3s ease;
+}
+
+.debtor-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.debtor-item.no-data {
+    border-left-color: #dc3545;
+    background: #fff5f5;
+}
+
+.debtor-main {
+    flex: 1;
+}
+
+.debtor-name {
+    font-weight: 600;
+    color: #212529;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.debtor-address {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.debtor-details {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.debt-amount {
+    font-weight: bold;
+    color: #dc3545;
+    font-size: 14px;
+}
+
+.no-data-badge {
+    background: #dc3545;
+    color: white;
+}
+
+.has-data-badge {
+    background: #28a745;
+    color: white;
+}
+
+/* Иконки и декоративные элементы */
+.debt-icon {
+    font-size: 18px;
+    margin-right: 8px;
+}
+
+.debtors-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.debtors-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.debtors-list::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.debtors-list::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+.scroll-hint {
+    text-align: center;
+    padding: 10px;
+    background: linear-gradient(transparent, #f8f9fa);
+    border-top: 1px solid #dee2e6;
+    animation: pulse 2s infinite;
+}
+
+.scroll-hint i {
+    display: block;
+    font-size: 16px;
+    margin-bottom: 5px;
+}
+
+.scroll-hint span {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+}
+
+/* Общие улучшения */
+.alert {
+    border-radius: 12px;
+}
+
+.card {
+    border-radius: 12px;
+}
+
+.table th {
+    font-weight: 600;
+    background: #f8f9fa;
+}
+
+.badge {
+    font-weight: 500;
+}
+
+.btn {
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .debtor-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .debtor-details {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .stat-number {
+        font-size: 20px;
+    }
+}
+</style>
+
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+{% endblock %}
+
+
+
+
+
+{% endcomment %}

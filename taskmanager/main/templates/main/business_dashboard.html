@@ -1,0 +1,276 @@
+{% extends 'main/base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Для бизнеса</h2>
+    <p>Загрузите файлы для массовой генерации претензий</p>
+    
+    <form method="post" enctype="multipart/form-data" id="uploadForm" action="{% url 'process_business_files' %}">
+        {% csrf_token %}
+        
+        <!-- Область для загрузки файлов -->
+        <div class="upload-area mb-4" id="uploadArea">
+            <div class="upload-icon">📁</div>
+            <h5>Выберите файлы для загрузки</h5>
+            <p class="text-muted">Перетащите файлы сюда или нажмите для выбора</p>
+            <input class="form-control d-none" type="file" name="files" id="files" multiple required>
+        </div>
+        
+        <!-- Список выбранных файлов -->
+        <div class="file-list mb-4" id="fileList">
+            <p class="text-muted text-center">Файлы не выбраны</p>
+        </div>
+        
+        <button type="submit" class="btn btn-primary" id="submitBtn">
+            Загрузить и обработать
+        </button>
+    </form>
+    
+    <div class="mt-4">
+        <h5>Необходимые файлы:</h5>
+        <ul class="list-unstyled">
+            <li>Файл начислений и оплат (Excel)</li>
+            <li>Файл с персональными данными (Excel)</li>
+            <li class="text-muted fst-italic">Шаблон претензии (DOCX) - опционально</li>
+        </ul>
+    </div>
+</div>
+
+<style>
+.upload-area {
+    border: 2px dashed #dee2e6;
+    border-radius: 8px;
+    padding: 40px 20px;
+    text-align: center;
+    transition: all 0.3s;
+    cursor: pointer;
+    background-color: #f8f9fa;
+    position: relative;
+}
+
+.upload-area:hover {
+    border-color: #0d6efd;
+    background-color: #e7f1ff;
+}
+
+.upload-area.active {
+    border-color: #0d6efd;
+    background-color: #d4e6ff;
+}
+
+.upload-icon {
+    font-size: 48px;
+    margin-bottom: 15px;
+    opacity: 0.7;
+}
+
+.file-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    border-left: 4px solid #0d6efd;
+    transition: all 0.2s;
+}
+
+.file-item:hover {
+    background-color: #e9ecef;
+}
+
+.file-icon {
+    margin-right: 12px;
+    font-size: 20px;
+}
+
+.file-info {
+    flex-grow: 1;
+}
+
+.file-name {
+    font-weight: 500;
+    margin-bottom: 4px;
+    word-break: break-all;
+}
+
+.file-status {
+    font-size: 0.85em;
+    color: #6c757d;
+}
+
+.file-remove {
+    background: none;
+    border: none;
+    color: #dc3545;
+    cursor: pointer;
+    font-size: 18px;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+.file-remove:hover {
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+.status-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+.status-ready {
+    background-color: #198754;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.getElementById('files');
+    const uploadArea = document.getElementById('uploadArea');
+    const fileList = document.getElementById('fileList');
+    const submitBtn = document.getElementById('submitBtn');
+    const uploadForm = document.getElementById('uploadForm');
+    
+    // Хранилище для выбранных файлов
+    let selectedFiles = [];
+    
+    // Активация области загрузки
+    uploadArea.addEventListener('click', function() {
+        fileInput.click();
+    });
+    
+    // Обработчик выбора файлов
+    fileInput.addEventListener('change', function(e) {
+        handleFiles(e.target.files);
+    });
+    
+    // Обработчики для drag & drop
+    uploadArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        uploadArea.classList.add('active');
+    });
+    
+    uploadArea.addEventListener('dragleave', function() {
+        uploadArea.classList.remove('active');
+    });
+    
+    uploadArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        uploadArea.classList.remove('active');
+        handleFiles(e.dataTransfer.files);
+    });
+    
+    // Функция обработки выбранных файлов
+    function handleFiles(files) {
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            
+            // Проверяем, не добавлен ли уже этот файл
+            if (!selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+                selectedFiles.push(file);
+            }
+        }
+        
+        updateFileList();
+        updateFileInput();
+    }
+    
+    // Обновление списка файлов в интерфейсе
+    function updateFileList() {
+        fileList.innerHTML = '';
+        
+        if (selectedFiles.length === 0) {
+            fileList.innerHTML = '<p class="text-muted text-center">Файлы не выбраны</p>';
+            return;
+        }
+        
+        selectedFiles.forEach((file, index) => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            
+            // Определяем иконку в зависимости от типа файла
+            let fileIcon = '📄';
+            if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
+                fileIcon = '📊';
+            } else if (file.name.toLowerCase().endsWith('.docx') || file.name.toLowerCase().endsWith('.doc')) {
+                fileIcon = '📝';
+            }
+            
+            fileItem.innerHTML = `
+                <div class="file-icon">${fileIcon}</div>
+                <div class="file-info">
+                    <div class="file-name">${file.name}</div>
+                    <div class="file-status">
+                        <span class="status-indicator status-ready"></span>
+                        Готов к загрузке • ${formatFileSize(file.size)}
+                    </div>
+                </div>
+                <button type="button" class="file-remove" data-index="${index}">×</button>
+            `;
+            
+            fileList.appendChild(fileItem);
+        });
+        
+        // Добавляем обработчики для кнопок удаления
+        document.querySelectorAll('.file-remove').forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const index = parseInt(this.getAttribute('data-index'));
+                selectedFiles.splice(index, 1);
+                updateFileList();
+                updateFileInput();
+            });
+        });
+    }
+    
+    // Обновление скрытого file input
+    function updateFileInput() {
+        // Создаем новый DataTransfer для обновления файлов в input
+        const dataTransfer = new DataTransfer();
+        selectedFiles.forEach(file => {
+            dataTransfer.items.add(file);
+        });
+        fileInput.files = dataTransfer.files;
+    }
+    
+    // Форматирование размера файла
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    
+    // Обработчик отправки формы
+    uploadForm.addEventListener('submit', function(e) {
+        if (selectedFiles.length === 0) {
+            e.preventDefault();
+            alert('Пожалуйста, выберите файлы для загрузки');
+            return;
+        }
+        
+        // Показываем индикатор загрузки
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Обработка...';
+    });
+    
+    // Инициализация
+    updateFileList();
+});
+</script>
+{% endblock %}

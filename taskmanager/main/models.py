@@ -38,10 +38,64 @@ class LawIssue(models.Model):
      
 
      
-    
     def __str__(self):
         return self.title
     
     class Meta:
         verbose_name = 'Претензия'
         verbose_name_plural = 'Претензии'
+
+
+class BusinessClient(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    client_name = models.CharField("Название организации", max_length=255, blank=True, null=True)
+    # client_inn = models.CharField("ИНН", max_length=20, blank=True, null=True)
+    # client_ogrn = models.CharField("ОГРН", max_length=20, blank=True, null=True)
+    # client_address = models.TextField("Адрес", blank=True, null=True)
+    # client_email = models.EmailField("Email", max_length=255, blank=True, null=True)
+    # client_phone = models.CharField("Телефон", max_length=20, blank=True, null=True)
+    
+    # Файлы
+    charges_file = models.FileField(
+        "Файл начислений и оплат", 
+        upload_to='business/charges/',
+        blank=True,
+        null=True
+    )
+    personal_data_claim_file = models.FileField(
+        "Претензия персональные данные", 
+        upload_to='business/personal_data/',
+        blank=True,
+        null=True
+    )
+    snt_claim_file = models.FileField(
+        "Претензия СНТ", 
+        upload_to='business/snt/',
+        blank=True,
+        null=True
+    )
+    
+    # Сгенерированные PDF
+    generated_pdf = models.FileField(
+        "Сгенерированный PDF", 
+        upload_to='business/generated_pdf/',
+        blank=True,
+        null=True
+    )
+    
+    # ZIP архив
+    zip_archive = models.FileField(
+        "ZIP архив", 
+        upload_to='business/zips/',
+        blank=True,
+        null=True
+    )
+    
+    is_processed = models.BooleanField("Обработан", default=False)
+    
+    def __str__(self):
+        return f"{self.client_name} ({self.client_inn})"
+    
+    class Meta:
+        verbose_name = 'Бизнес-клиент'
+        verbose_name_plural = 'Бизнес-клиенты'
