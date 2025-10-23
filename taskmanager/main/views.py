@@ -796,7 +796,10 @@ def process_business_files(request):
             # Получаем список ранее оповещенных должников
             previously_contacted = get_previously_contacted_debtors()
             
-            # ИЗМЕНЕНИЕ: ФИЛЬТРУЕМ ТОЛЬКО ПО ДОЛГУ > 60,000
+            # ИЗМЕНЕНИЕ: total_claims - ВСЕ должники из файла
+            total_debtors = len(claims_data)
+            
+            # ФИЛЬТРУЕМ ТОЛЬКО ПО ДОЛГУ > 60,000
             all_debtors_over_60k = []
             already_contacted_claims = []
             
@@ -824,14 +827,14 @@ def process_business_files(request):
                         all_debtors_over_60k.append(claim)
             
             print(f"🔍 Отладочная информация:")
-            print(f"   Всего claims_data: {len(claims_data)}")
+            print(f"   Всего claims_data: {total_debtors}")  # ИЗМЕНЕНО
             print(f"   С долгом > 60k: {len(all_debtors_over_60k)}")
             print(f"   Уже в истории: {len(already_contacted_claims)}")
             
             # Генерируем PDF файлы только для новых должников с полными данными
             generated_pdfs = []
             for claim in all_debtors_over_60k:
-                # ИЗМЕНЕНИЕ: генерируем PDF только если есть персональные данные
+                # Генерируем PDF только если есть персональные данные
                 if claim.get('has_personal_data', False):
                     pdf_result = generate_single_business_pdf(claim, None)
                     if pdf_result:
@@ -843,17 +846,17 @@ def process_business_files(request):
             # Сохраняем в сессии
             request.session['business_zip'] = zip_buffer.getvalue().decode('latin-1')
             request.session['generated_count'] = len(generated_pdfs)
-            request.session['total_claims'] = len(claims_data)
-            request.session['filtered_claims'] = len(all_debtors_over_60k)  # Все с долгом > 60k
-            request.session['claims_data'] = all_debtors_over_60k  # ВСЕ должники с долгом > 60k
+            request.session['total_claims'] = total_debtors  # ИЗМЕНЕНО: все должники
+            request.session['filtered_claims'] = len(all_debtors_over_60k)  # Только с долгом > 60k
+            request.session['claims_data'] = all_debtors_over_60k  # Только с долгом > 60k
             request.session['all_claims_data'] = all_debtors_over_60k  # Для CSV - только те, у кого есть данные
             request.session['already_contacted_claims'] = already_contacted_claims
             
             context = {
                 'generated_count': len(generated_pdfs),
-                'total_claims': len(claims_data),
-                'filtered_claims': len(all_debtors_over_60k),  # Все с долгом > 60k
-                'claims_data': all_debtors_over_60k,  # ВСЕ должники с долгом > 60k
+                'total_claims': total_debtors,  # ИЗМЕНЕНО: все должники
+                'filtered_claims': len(all_debtors_over_60k),  # Только с долгом > 60k
+                'claims_data': all_debtors_over_60k,  # Только с долгом > 60k
                 'already_contacted_claims': already_contacted_claims,
                 'has_zip': len(generated_pdfs) > 0
             }
