@@ -776,7 +776,7 @@ def business_dashboard(request):
     return render(request, 'main/business_dashboard.html')
 
 def process_business_files(request):
-    """Обработка загруженных файлов и генерация претензий через локальную обработку"""
+    """Обработка загруженных файлов и генерация претензий"""
     if request.method == 'POST' and request.FILES:
         uploaded_files = request.FILES.getlist('files')
         
@@ -790,29 +790,36 @@ def process_business_files(request):
                 filename = fs.save(f"business_temp_{file.name}", file)
                 temp_files[file.name] = fs.path(filename)
             
-            # Обрабатываем файлы через ЛОКАЛЬНУЮ обработку
+            # Обрабатываем файлы через LLM - теперь получаем ВСЕХ должников
             claims_data = business_model_predict(temp_files, None)
+            
+            # ВАЖНО: claims_data теперь содержит ВСЕХ должников с долгом > 0
+            all_debtors = claims_data
+            
+            # Считаем статистику
+            total_debtors = len(all_debtors)
+            debtors_over_60k = sum(1 for claim in all_debtors if claim.get('debt_amount', 0) > 60000)
+            
+            print(f"🔍 Отладочная информация:")
+            print(f"   Всего claims_data: {total_debtors}")
+            print(f"   С долгом > 60k: {debtors_over_60k}")
             
             # Получаем список ранее оповещенных должников
             previously_contacted = get_previously_contacted_debtors()
             
-            # ИЗМЕНЕНИЕ: total_claims - ВСЕ должники из файла
-            total_debtors = len(claims_data)
-            
-            # ФИЛЬТРУЕМ ТОЛЬКО ПО ДОЛГУ > 60,000
+            # ФИЛЬТРУЕМ для генерации PDF только по долгу > 60,000
             all_debtors_over_60k = []
             already_contacted_claims = []
             
             for claim in claims_data:
                 debt = claim.get('debt_amount', 0)
                 
-                # ВАЖНО: фильтруем только по долгу
+                # Для генерации PDF берем только с долгом > 60k
                 if debt > 60000:
                     fio = claim.get('fio', '')
                     snt_address = claim.get('snt_address', '')
                     
                     if is_debtor_previously_contacted(fio, snt_address):
-                        # Добавляем дату из CSV
                         contacted_date = None
                         for contacted in previously_contacted:
                             if (contacted['contractor'] == fio and 
@@ -826,15 +833,11 @@ def process_business_files(request):
                     else:
                         all_debtors_over_60k.append(claim)
             
-            print(f"🔍 Отладочная информация:")
-            print(f"   Всего claims_data: {total_debtors}")  # ИЗМЕНЕНО
-            print(f"   С долгом > 60k: {len(all_debtors_over_60k)}")
             print(f"   Уже в истории: {len(already_contacted_claims)}")
             
-            # Генерируем PDF файлы только для новых должников с полными данными
+            # Генерируем PDF файлы только для новых должников с долгом > 60k и полными данными
             generated_pdfs = []
             for claim in all_debtors_over_60k:
-                # Генерируем PDF только если есть персональные данные
                 if claim.get('has_personal_data', False):
                     pdf_result = generate_single_business_pdf(claim, None)
                     if pdf_result:
@@ -846,17 +849,19 @@ def process_business_files(request):
             # Сохраняем в сессии
             request.session['business_zip'] = zip_buffer.getvalue().decode('latin-1')
             request.session['generated_count'] = len(generated_pdfs)
-            request.session['total_claims'] = total_debtors  # ИЗМЕНЕНО: все должники
-            request.session['filtered_claims'] = len(all_debtors_over_60k)  # Только с долгом > 60k
-            request.session['claims_data'] = all_debtors_over_60k  # Только с долгом > 60k
-            request.session['all_claims_data'] = all_debtors_over_60k  # Для CSV - только те, у кого есть данные
+            request.session['total_claims'] = total_debtors  # ВСЕ должники
+            request.session['debtors_over_60k'] = debtors_over_60k  # Количество с долгом > 60k
+            request.session['filtered_claims'] = len(all_debtors_over_60k)  # Для генерации PDF
+            request.session['all_debtors'] = all_debtors  # ВСЕ должники для отображения
+            request.session['all_claims_data'] = all_debtors  # Для рассылки - ВСЕ должники
             request.session['already_contacted_claims'] = already_contacted_claims
             
             context = {
                 'generated_count': len(generated_pdfs),
-                'total_claims': total_debtors,  # ИЗМЕНЕНО: все должники
-                'filtered_claims': len(all_debtors_over_60k),  # Только с долгом > 60k
-                'claims_data': all_debtors_over_60k,  # Только с долгом > 60k
+                'total_claims': total_debtors,  # ВСЕ должники
+                'debtors_over_60k': debtors_over_60k,  # Количество с долгом > 60k
+                'filtered_claims': len(all_debtors_over_60k),  # Для генерации PDF
+                'all_debtors': all_debtors,  # ВСЕ должники для отображения
                 'already_contacted_claims': already_contacted_claims,
                 'has_zip': len(generated_pdfs) > 0
             }
@@ -1089,3 +1094,169 @@ def send_business_emails(request):
             return HttpResponse(f'Ошибка отправки писем: {str(e)}')
     
     return redirect('generate_business_claims')
+
+#=====
+import requests
+import json
+from django.core.mail import send_mail
+from django.conf import settings
+
+def send_sms_notification(phone, message):
+    """
+    Отправка SMS через сервис smsaero.ru
+    """
+    try:
+        # Данные для авторизации в smsaero
+        sms_login = os.getenv('SMSAERO_EMAIL')  # Ваш email в smsaero
+        sms_api_key = os.getenv('SMSAERO_API_KEY')  # Ваш API ключ
+        
+        if not sms_login or not sms_api_key:
+            print("❌ Не настроены учетные данные SMS сервиса")
+            return False
+        
+        # Формируем базовую авторизацию
+        auth = (sms_login, sms_api_key)
+        
+        # Подготавливаем номер телефона (оставляем только цифры)
+        clean_phone = ''.join(filter(str.isdigit, phone))
+        if clean_phone.startswith('8') and len(clean_phone) == 11:
+            clean_phone = '7' + clean_phone[1:]  # Преобразуем 8 в 7
+        
+        # URL для отправки SMS
+        url = "https://gate.smsaero.ru/v2/sms/send"
+        
+        # Данные для отправки
+        payload = {
+            "number": clean_phone,
+            "text": message,
+            "sign": "SMS Aero"  # Подпись отправителя (должна быть предварительно настроена в аккаунте)
+        }
+        
+        # Отправляем запрос
+        response = requests.post(
+            url,
+            json=payload,
+            auth=auth,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('success', False):
+                print(f"✅ SMS отправлено на {phone}")
+                return True
+            else:
+                print(f"❌ Ошибка SMS: {result.get('message', 'Unknown error')}")
+                return False
+        else:
+            print(f"❌ HTTP ошибка при отправке SMS: {response.status_code}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Ошибка отправки SMS: {e}")
+        return False
+
+def send_email_notification(email, subject, message):
+    """
+    Отправка email уведомления
+    """
+    try:
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+        print(f"✅ Email отправлен на {email}")
+        return True
+    except Exception as e:
+        print(f"❌ Ошибка отправки email: {e}")
+        return False
+
+def send_bulk_notifications(request):
+    """
+    Массовая рассылка SMS и email всем должникам
+    """
+    if request.method == 'POST':
+        claims_data = request.session.get('all_claims_data', [])
+        
+        if not claims_data:
+            return HttpResponse('Нет данных для рассылки')
+        
+        # Статистика
+        sms_sent = 0
+        emails_sent = 0
+        total_debtors = len(claims_data)
+        
+        results = []
+        
+        for claim in claims_data:
+            fio = claim.get('fio', '')
+            phone = claim.get('phone', '')
+            email_addr = claim.get('email', '')
+            debt_amount = claim.get('debt_amount', 0)
+            snt_address = claim.get('snt_address', '')
+            
+            # Пропускаем если нет долга
+            if debt_amount <= 0:
+                continue
+            
+            result = {
+                'fio': fio,
+                'phone': phone,
+                'email': email_addr,
+                'debt_amount': debt_amount,
+                'snt_address': snt_address,
+                'sms_sent': False,
+                'email_sent': False
+            }
+            
+            # Отправка SMS
+            if phone and phone != '_________________________':
+                sms_message = f"{fio},задолжен, по {snt_address} в размере {debt_amount:,.2f} руб"
+                if send_sms_notification(phone, sms_message):
+                    sms_sent += 1
+                    result['sms_sent'] = True
+            
+            # Отправка Email
+            if email_addr and email_addr != '_________________________':
+                email_subject = f"Уведомление о задолженности - {snt_address}"
+                
+                email_message = f"""Уважаемый {fio} собственник {snt_address} в КП "Крона"!
+
+Напоминаем вам о важности своевременной оплаты счетов за услуги, предоставляемые ООО «УК ДАР». Оплата счетов должна осуществляться до 10-го числа каждого месяца.
+
+⌛️ Несвоевременная оплата может привести к образованию задолженности, что, в свою очередь, может повлиять на качество и непрерывность предоставления эксплуатационных услуг. 
+
+⚠️ В настоящий момент у вас числится задолженность в размере {debt_amount:,.2f} руб.
+
+🚨Обращаем Ваше внимание, что в соответствии с установленными правилами, при наличии задолженности более одного календарного месяца, собственник можете быть ограничен в предоставлении эксплуатационных услуг, а также отключен от системы дистанционных заказов пропусков Pass 24.online. В указанном случае проезд на территорию будет осуществляется на основании бумажных пропусков, оформленных в порядке, предусмотренном положением об организации въезда и выезда транспортных средств.🚨
+
+📱 Для обсуждения вопросов, связанных с оплатой, вы можете связаться с представителем ООО «УК ДАР» по телефону 8 (915) 173-71-43 (доступен WhatsApp, Telegram, SMS) или по электронной почте: yk.dar@ya.ru.
+
+С уважением,
+ООО «УК ДАР»"""
+                
+                if send_email_notification(email_addr, email_subject, email_message):
+                    emails_sent += 1
+                    result['email_sent'] = True
+            
+            results.append(result)
+        
+        # Сохраняем результаты в сессии
+        request.session['notification_results'] = results
+        request.session['sms_sent_count'] = sms_sent
+        request.session['emails_sent_count'] = emails_sent
+        
+        context = {
+            'total_debtors': total_debtors,
+            'sms_sent': sms_sent,
+            'emails_sent': emails_sent,
+            'results': results,
+            'has_results': True
+        }
+        
+        return render(request, 'main/notification_results.html', context)
+    
+    return redirect('process_business_files')

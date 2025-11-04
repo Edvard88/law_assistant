@@ -195,39 +195,29 @@ import json
 
 def business_model_predict(uploaded_files, template_content=None):
     """
-    Генерирует претензии для бизнеса на основе загруженных файлов
+    Генерирует претензии для бизнеса на основе загруженных файлов через LLM
     """
     client = OpenAI(api_key=OPENAI_API_KEY)
 
-    # Сначала получаем точный список должников из отладочной функции
+    # Получаем точный список должников для верификации
     expected_debtors = get_expected_debtors_list(uploaded_files)
     
     print("=== ОБЩАЯ ОТЛАДКА ===")
     debug_debt_calculation(uploaded_files)
-    print("=== ОТЛАДКА ПЕРСОНАЛЬНЫХ ДАННЫХ ===")
-    debug_personal_data_file(uploaded_files)
 
-    # УСИЛЕННЫЙ ПРОМПТ С АВТОМАТИЧЕСКИМ СПИСКОМ ДОЛЖНИКОВ
+    # УСИЛЕННЫЙ ПРОМПТ ДЛЯ LLM
     system_prompt = """
 Ты ассистент юриста для массовой генерации претензий в СНТ.
 
-ТВОЯ ЗАДАЧА: найти ВСЕХ должников с долгом > 60000 рублей без исключений.
-
-КРИТИЧЕСКИ ВАЖНО:
-1. ПРОАНАЛИЗИРУЙ КАЖДУЮ строку файла начислений
-2. НЕ ПРОПУСТИ НИ ОДНОГО должника с долгом > 60000 рублей
-3. ВКЛЮЧИ ВСЕХ из предоставленного списка ожидаемых должников
+ТВОЯ ЗАДАЧА: найти ВСЕХ должников с долгом > 0 рублей.
 
 ШАГИ АНАЛИЗА:
 1. Проанализируй ВСЕ строки из файла начислений
 2. Сгруппируй по уникальной комбинации "ФИО + Адрес участка в СНТ"
 3. Для каждой группы суммируй ВСЕ значения долга
-4. Включи ВСЕХ, где суммарный долг > 60000 рублей
+4. Включи ВСЕХ, где суммарный долг > 0 рублей
 
-ПРАВИЛА ГРУППИРОВКИ:
-- Разные участки у одного ФИО = РАЗНЫЕ должники
-- Одинаковые ФИО+участок с несколькими строками = СУММИРУЙ долги
-- NaN значения в долге считай как 0
+ВАЖНО: Преобразуй все значения долга в числа, удаляя пробелы и заменяя запятые на точки.
 
 Структура JSON для каждого должника:
 {
@@ -238,10 +228,11 @@ def business_model_predict(uploaded_files, template_content=None):
     "email": "Электронная почта",
     "phone": "Телефон", 
     "debt_amount": 12345.67,
-    "contract_number": "Номер договора"
+    "contract_number": "Номер договора",
+    "has_personal_data": true/false
 }
 
-Верни ТОЛЬКО JSON массив!
+Верни ТОЛЬКО JSON массив со ВСЕМИ найденными должниками с долгом > 0 рублей!
 """
 
     try:
@@ -262,11 +253,10 @@ def business_model_predict(uploaded_files, template_content=None):
                         
                 except Exception as e:
                     print(f"Ошибка чтения Excel файла {filename}: {e}")
-                    return []
         
         # Формируем запрос с АВТОМАТИЧЕСКИМ списком должников
         user_content = f"""
-ПРОАНАЛИЗИРУЙ ЭТИ ДАННЫЕ И НАЙДИ ВСЕХ ДОЛЖНИКОВ С ДОЛГОМ > 60000 РУБЛЕЙ:
+ПРОАНАЛИЗИРУЙ ЭТИ ДАННЫЕ И НАЙДИ ВСЕХ ДОЛЖНИКОВ С ДОЛГОМ > 0 РУБЛЕЙ:
 
 ФАЙЛ НАЧИСЛЕНИЙ (долги):
 {accruals_content}
@@ -275,13 +265,13 @@ def business_model_predict(uploaded_files, template_content=None):
 {personal_content}
 
 ВАЖНОЕ ПРЕДУПРЕЖДЕНИЕ:
-По нашим точным расчетам должно быть {expected_debtors['count']} должников с долгом > 60000 рублей.
+По нашим точным расчетам должно быть {expected_debtors['count']} должников с долгом > 0 рублей.
 Если ты находишь меньше - ТЫ ПРОПУСТИЛ ДОЛЖНИКОВ!
 
 ОСОБОЕ ВНИМАНИЕ НА ЭТИХ ДОЛЖНИКОВ (они точно есть в файле и должны быть включены):
 {expected_debtors['list']}
 
-ПЕРЕПРОВЕРЬ ВСЕ СТРОКИ и убедись, что включил ВСЕХ {expected_debtors['count']} должников!
+ПЕРЕПРОВЕРЬ ВСЕ СТРОКИ и убедись, что включил ВСЕХ {expected_debtors['count']} должников с долгом > 0 рублей!
 
 Верни JSON массив со ВСЕМИ найденными должниками.
 """
@@ -310,7 +300,7 @@ def business_model_predict(uploaded_files, template_content=None):
         return []
 
 def get_expected_debtors_list(uploaded_files):
-    """Получает точный список должников из файла начислений с гибким поиском колонок"""
+    """Получает точный список ВСЕХ должников из файла начислений"""
     try:
         import pandas as pd
         from collections import defaultdict
@@ -323,7 +313,7 @@ def get_expected_debtors_list(uploaded_files):
                 break
         
         if not accruals_file:
-            return {'count': 0, 'list': 'Файл начислений не найден'}
+            return {'count': 0, 'over_60k_count': 0, 'list': 'Файл начислений не найден'}
         
         df = pd.read_excel(accruals_file)
         
@@ -336,7 +326,7 @@ def get_expected_debtors_list(uploaded_files):
         
         if not fio_column or not debt_column:
             print("Не найдены обязательные колонки (ФИО или Долг)")
-            return {'count': 0, 'list': 'Не найдены обязательные колонки'}
+            return {'count': 0, 'over_60k_count': 0, 'list': 'Не найдены обязательные колонки'}
         
         # Группируем по ФИО и адресу
         debt_groups = defaultdict(float)
@@ -344,43 +334,64 @@ def get_expected_debtors_list(uploaded_files):
         for index, row in df.iterrows():
             fio = row.get(fio_column, '')
             address = row.get(address_column, '') if address_column else ''
-            debt_str = row.get(debt_column, '')
+            debt_str = str(row.get(debt_column, ''))
             
-            if not fio or pd.isna(fio):
+            if not fio or pd.isna(fio) or fio == '':
                 continue
                 
             debt = 0.0
-            if pd.notna(debt_str) and debt_str != '':
+            if pd.notna(debt_str) and debt_str != '' and debt_str != 'nan':
                 try:
-                    debt = float(debt_str)
-                except (ValueError, TypeError):
+                    # Очищаем строку - удаляем все пробелы
+                    debt_str_clean = debt_str.replace(' ', '')
+                    
+                    # Если есть и запятая и точка - это американский формат (26,248.89)
+                    if ',' in debt_str_clean and '.' in debt_str_clean:
+                        # Удаляем запятые как разделители тысяч, оставляем точку как десятичный разделитель
+                        debt_str_clean = debt_str_clean.replace(',', '')
+                    # Если только запятая - это русский формат (26248,89)
+                    elif ',' in debt_str_clean:
+                        debt_str_clean = debt_str_clean.replace(',', '.')
+                    
+                    debt = float(debt_str_clean)
+                    print(f"✅ Преобразовано: '{debt_str}' -> {debt}")
+                    
+                except (ValueError, TypeError) as e:
+                    print(f"❌ Не удалось преобразовать долг '{debt_str}' в число: {e}")
                     debt = 0.0
             
             # Создаем ключ группировки
-            if address and pd.notna(address):
+            if address and pd.notna(address) and str(address) != 'nan':
                 key = f"{fio} | {address}"
             else:
                 key = f"{fio}"
                 
             debt_groups[key] += debt
         
-        # Формируем список должников с долгом > 60k
-        debtors_list = []
-        for key, total_debt in sorted(debt_groups.items(), key=lambda x: x[1], reverse=True):
-            if total_debt > 60000:
-                debtors_list.append(f"- {key}: {total_debt:.2f} руб.")
+        # Формируем список ВСЕХ должников (с долгом > 0)
+        all_debtors_list = []
+        debtors_over_60k_count = 0
         
-        # Форматируем для промпта
-        list_text = "\n".join(debtors_list)
+        for key, total_debt in sorted(debt_groups.items(), key=lambda x: x[1], reverse=True):
+            if total_debt > 0:
+                all_debtors_list.append(f"- {key}: {total_debt:,.2f} руб.")
+                if total_debt > 60000:
+                    debtors_over_60k_count += 1
+        
+        print(f"✅ Найдено {len(all_debtors_list)} должников с долгом > 0 руб.")
+        print(f"✅ Из них {debtors_over_60k_count} с долгом > 60,000 руб.")
         
         return {
-            'count': len(debtors_list),
-            'list': list_text
+            'count': len(all_debtors_list),  # ВСЕ должники
+            'over_60k_count': debtors_over_60k_count,  # Только > 60k
+            'list': "\n".join(all_debtors_list)  # Все должники для промпта
         }
         
     except Exception as e:
-        print(f"Ошибка получения списка должников: {e}")
-        return {'count': 0, 'list': f'Ошибка: {e}'}
+        print(f"❌ Ошибка получения списка должников: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'count': 0, 'over_60k_count': 0, 'list': f'Ошибка: {e}'}
 
 def find_column_by_keywords(df, keywords):
     """Находит колонку по ключевым словам в названии"""
@@ -484,7 +495,7 @@ def parse_business_response(response_text):
             json_str = json_match.group()
             data = json.loads(json_str)
             
-            # ВАЛИДАЦИЯ И ОБРАБОТКА ДАННЫХ
+            # ВАЛИДАЦИЯ И ОБРАБОТКА ДАННЫХ - ВКЛЮЧАЕМ ВСЕХ С ДОЛГОМ > 0
             processed_data = []
             for item in data:
                 # Проверяем обязательные поля
@@ -499,8 +510,8 @@ def parse_business_response(response_text):
                 except (ValueError, TypeError):
                     debt_amount = 0.0
                 
-                # Пропускаем если долг меньше порога
-                if debt_amount < 60000:
+                # ВКЛЮЧАЕМ ВСЕХ С ДОЛГОМ > 0 (не фильтруем по 60k)
+                if debt_amount <= 0:
                     continue
                 
                 # Проверяем наличие персональных данных
@@ -525,13 +536,14 @@ def parse_business_response(response_text):
                 
                 processed_data.append(processed_item)
             
-            print(f"GPT-4o обработал: {len(processed_data)} записей с долгом > 60,000 руб.")
+            print(f"GPT-4o обработал: {len(processed_data)} записей с долгом > 0 руб.")
             
             # ВЫВОД СТАТИСТИКИ
             unique_fios = len(set(item['fio'] for item in processed_data))
             with_personal_data = sum(1 for item in processed_data if item['has_personal_data'])
+            over_60k = sum(1 for item in processed_data if item['debt_amount'] > 60000)
             
-            print(f"Статистика: {unique_fios} уникальных ФИО, {with_personal_data} с персональными данными")
+            print(f"Статистика: {unique_fios} уникальных ФИО, {with_personal_data} с персональными данными, {over_60k} с долгом > 60k")
             
             return processed_data
         else:
@@ -540,10 +552,6 @@ def parse_business_response(response_text):
             
     except Exception as e:
         print(f"Ошибка парсинга ответа GPT-4o: {e}")
-        return []
-            
-    except Exception as e:
-        print(f"Ошибка парсинга ответа LLM: {e}")
         return []
     
 
@@ -835,367 +843,3 @@ def process_files_locally(uploaded_files):
         traceback.print_exc()
         return []
     
-
-# def process_business_files_fallback(uploaded_files):
-#     """Fallback метод для обработки файлов если LLM не работает"""
-#     claims_data = []
-    
-#     try:
-#         import pandas as pd
-        
-#         # Ищем файлы по названиям
-#         personal_data_file = None
-#         accruals_file = None
-        
-#         for filename, filepath in uploaded_files.items():
-#             if 'персональные_данные' in filename.lower() or 'персональные данные' in filename.lower():
-#                 personal_data_file = filepath
-#             elif 'начисления' in filename.lower() or 'оплаты' in filename.lower():
-#                 accruals_file = filepath
-        
-#         print(f"Fallback: personal_file={personal_data_file}, accruals_file={accruals_file}")
-        
-#         if personal_data_file and accruals_file:
-#             # Читаем Excel файлы
-#             try:
-#                 personal_df = pd.read_excel(personal_data_file, header=7)  # Пропускаем заголовки
-#             except:
-#                 personal_df = pd.read_excel(personal_data_file)  # Если не получается, читаем без пропуска
-            
-#             accruals_df = pd.read_excel(accruals_file)
-            
-#             print(f"Fallback: personal_df колонки: {personal_df.columns.tolist()}")
-#             print(f"Fallback: accruals_df колонки: {accruals_df.columns.tolist()}")
-            
-#             # Обрабатываем персональные данные
-#             processed_count = 0
-#             for index, row in personal_df.iterrows():
-#                 # Получаем ФИО из колонки 'Контрагенты' или похожей
-#                 fio = None
-#                 for col in personal_df.columns:
-#                     if 'контрагент' in str(col).lower() or 'фио' in str(col).lower():
-#                         fio = row.get(col)
-#                         break
-                
-#                 if not fio or pd.isna(fio) or fio == '':
-#                     continue
-                
-#                 print(f"Fallback: Обрабатываем {fio}")
-                
-#                 # Получаем остальные данные
-#                 address = '_________________________'
-#                 snt_address = '_________________________'
-#                 kadastr = '_________________________'
-#                 email = '_________________________'
-#                 phone = '_________________________'
-#                 contract_number = '_________________________'
-                
-#                 # Ищем адрес
-#                 for col in personal_df.columns:
-#                     col_lower = str(col).lower()
-#                     if 'адрес' in col_lower and 'снт' not in col_lower:
-#                         addr_val = row.get(col)
-#                         if pd.notna(addr_val) and str(addr_val).strip() != '':
-#                             address = str(addr_val)
-#                             break
-                
-#                 # Ищем адрес СНТ
-#                 for col in personal_df.columns:
-#                     col_lower = str(col).lower()
-#                     if 'адрес' in col_lower and 'снт' in col_lower:
-#                         snt_val = row.get(col)
-#                         if pd.notna(snt_val) and str(snt_val).strip() != '':
-#                             snt_address = str(snt_val)
-#                             break
-                
-#                 # Ищем кадастровый номер
-#                 for col in personal_df.columns:
-#                     col_lower = str(col).lower()
-#                     if 'кадастр' in col_lower:
-#                         kad_val = row.get(col)
-#                         if pd.notna(kad_val) and str(kad_val).strip() != '':
-#                             kadastr = str(kad_val)
-#                             break
-                
-#                 # Ищем email
-#                 for col in personal_df.columns:
-#                     col_lower = str(col).lower()
-#                     if 'email' in col_lower or 'почта' in col_lower or 'mail' in col_lower:
-#                         email_val = row.get(col)
-#                         if pd.notna(email_val) and str(email_val).strip() != '':
-#                             email = str(email_val)
-#                             break
-                
-#                 # Ищем телефон
-#                 for col in personal_df.columns:
-#                     col_lower = str(col).lower()
-#                     if 'телефон' in col_lower or 'phone' in col_lower or 'tel' in col_lower:
-#                         phone_val = row.get(col)
-#                         if pd.notna(phone_val) and str(phone_val).strip() != '':
-#                             phone = str(phone_val)
-#                             break
-                
-#                 # Ищем номер договора
-#                 for col in personal_df.columns:
-#                     col_lower = str(col).lower()
-#                     if 'договор' in col_lower or 'contract' in col_lower or 'номер' in col_lower:
-#                         contract_val = row.get(col)
-#                         if pd.notna(contract_val) and str(contract_val).strip() != '':
-#                             contract_number = str(contract_val)
-#                             break
-                
-#                 # Проверяем, есть ли персональные данные
-#                 has_personal_data = (address != '_________________________')
-                
-#                 # Находим долг
-#                 debt = find_debt_in_accruals(accruals_df, str(fio))
-                
-#                 claim_data = {
-#                     "fio": str(fio).strip(),
-#                     "address": address,
-#                     "snt_address": snt_address,
-#                     "kadastr_number": kadastr,
-#                     "email": email,
-#                     "phone": phone,
-#                     "contract_number": contract_number,
-#                     "debt_amount": float(debt) if debt else 0.0,
-#                     "has_personal_data": has_personal_data
-#                 }
-                
-#                 print(f"Fallback: Данные для {fio}: долг = {debt}, has_personal_data = {has_personal_data}, адрес = {address}, договор = {contract_number}")
-                
-#                 # Добавляем только если есть долг
-#                 if debt and debt > 0:
-#                     claims_data.append(claim_data)
-#                     processed_count += 1
-            
-#             print(f"Fallback: Обработано {processed_count} записей с долгом")
-        
-#         print(f"Fallback: Всего найдено {len(claims_data)} записей с долгом")
-#         return claims_data
-        
-#     except Exception as e:
-#         print(f"Ошибка в fallback обработке: {e}")
-#         import traceback
-#         traceback.print_exc()
-#         return []
-        
-
-# def find_debt_in_accruals(accruals_df, fio):
-#     """Находит долг по ФИО в файле начислений"""
-#     try:
-#         # Ищем строки, содержащие ФИО (частичное совпадение)
-#         for col in accruals_df.columns:
-#             if 'контрагент' in col.lower() or 'фио' in col.lower() or 'name' in col.lower():
-#                 matching_rows = accruals_df[accruals_df[col].astype(str).str.contains(fio, na=False)]
-#                 if not matching_rows.empty:
-#                     # Ищем колонку с долгом
-#                     for debt_col in accruals_df.columns:
-#                         if 'долг' in debt_col.lower():
-#                             debt_value = matching_rows[debt_col].iloc[0]
-#                             if pd.notna(debt_value) and debt_value != '':
-#                                 try:
-#                                     return float(debt_value)
-#                                 except:
-#                                     return 0.0
-#         return 0.0
-#     except Exception as e:
-#         print(f"Ошибка поиска долга для {fio}: {e}")
-#         return 0.0
-    
-
-# def process_business_files(request):
-#     """Обработка загруженных файлов и генерация претензий через LLM"""
-#     if request.method == 'POST' and request.FILES:
-#         uploaded_files = request.FILES.getlist('files')
-        
-#         print(f"Получено файлов: {len(uploaded_files)}")
-#         for file in uploaded_files:
-#             print(f"Файл: {file.name}, размер: {file.size}")
-        
-#         # Временное хранение файлов
-#         temp_files = {}
-#         fs = FileSystemStorage(location=tempfile.gettempdir())
-        
-#         try:
-#             # Сохраняем файлы временно
-#             for file in uploaded_files:
-#                 filename = fs.save(f"business_temp_{file.name}", file)
-#                 temp_files[file.name] = fs.path(filename)
-            
-#             # Читаем шаблон если есть
-#             template_content = None
-#             for filename, filepath in temp_files.items():
-#                 if 'претензия_снг' in filename.lower() or 'шаблон' in filename.lower():
-#                     with open(filepath, 'r', encoding='utf-8') as f:
-#                         template_content = f.read()
-#                     break
-            
-#             print("Вызываем LLM модель...")
-#             # Обрабатываем файлы через LLM модель
-#             claims_data = business_model_predict(temp_files, template_content)
-            
-#             print(f"LLM вернула {len(claims_data)} записей")
-            
-#             # Фильтруем должников с долгом > 60,000 рублей
-#             filtered_claims = [
-#                 claim for claim in claims_data 
-#                 if claim.get('debt_amount', 0) > 60000
-#             ]
-            
-#             print(f"После фильтрации >60k: {len(filtered_claims)} записей")
-            
-#             # Генерируем PDF файлы
-#             generated_pdfs = []
-#             for claim in filtered_claims:
-#                 pdf_content = generate_single_business_pdf(claim, template_content)
-#                 if pdf_content:
-#                     filename = f"претензия_{claim['fio'].replace(' ', '_')}.pdf"
-#                     generated_pdfs.append({
-#                         'filename': filename,
-#                         'content': pdf_content,
-#                         'claim': claim
-#                     })
-            
-#             print(f"Сгенерировано PDF: {len(generated_pdfs)}")
-            
-#             # Создаем ZIP архив
-#             zip_buffer = create_business_zip_archive(generated_pdfs)
-            
-#             # Сохраняем в сессии
-#             request.session['business_zip'] = zip_buffer.getvalue().decode('latin-1')
-#             request.session['generated_count'] = len(generated_pdfs)
-#             request.session['total_claims'] = len(claims_data)
-#             request.session['filtered_claims'] = len(filtered_claims)
-            
-#             context = {
-#                 'generated_count': len(generated_pdfs),
-#                 'total_claims': len(claims_data),
-#                 'filtered_claims': len(filtered_claims),
-#                 'claims_data': filtered_claims,
-#                 'has_zip': len(generated_pdfs) > 0
-#             }
-            
-#             return render(request, 'main/process_business_files.html', context)
-            
-#         except Exception as e:
-#             print(f"Ошибка обработки файлов: {str(e)}")
-#             import traceback
-#             traceback.print_exc()
-            
-#             # Очистка временных файлов в случае ошибки
-#             for filepath in temp_files.values():
-#                 if os.path.exists(filepath):
-#                     os.remove(filepath)
-            
-#             return HttpResponse(f'Ошибка обработки файлов: {str(e)}')
-        
-#         finally:
-#             # Всегда очищаем временные файлы
-#             for filepath in temp_files.values():
-#                 if os.path.exists(filepath):
-#                     try:
-#                         os.remove(filepath)
-#                     except:
-#                         pass
-    
-#     return redirect('business')
-
-
-# def process_business_data_fallback(personal_file, accruals_file):
-#     """Альтернативная обработка без использования LLM"""
-#     import pandas as pd
-#     import re
-    
-#     # Загружаем данные
-#     personal_df = pd.read_excel(personal_file)
-#     accruals_df = pd.read_excel(accruals_file)
-    
-#     # Переименуем колонки для удобства
-#     personal_df.columns = ['index1', 'index2', 'Контрагенты', 'Адрес проживания', 'Адрес СНТ', 'Кадастровый номер', 'Электронная почта', 'Телефон']
-    
-#     # Автоматически находим колонку с долгом (ищем в нескольких вариантах)
-#     debt_column = None
-#     possible_debt_columns = []
-    
-#     for col in accruals_df.columns:
-#         col_lower = str(col).lower()
-#         if any(keyword in col_lower for keyword in ['долг', 'задолженность', 'debt', 'arrears']):
-#             possible_debt_columns.append(col)
-    
-#     # Выбираем наиболее подходящую колонку
-#     if possible_debt_columns:
-#         # Предпочитаем колонки с "долг" в названии
-#         for col in possible_debt_columns:
-#             if 'долг' in str(col).lower():
-#                 debt_column = col
-#                 break
-#         if debt_column is None:
-#             debt_column = possible_debt_columns[0]  # берем первую подходящую
-#         print(f"Fallback: Найдена колонка с долгом: {debt_column}")
-#     else:
-#         # Если не нашли колонку с долгом, пробуем найти числовую колонку в конце
-#         numeric_columns = []
-#         for col in accruals_df.columns:
-#             if accruals_df[col].dtype in ['float64', 'int64']:
-#                 numeric_columns.append(col)
-        
-#         if numeric_columns:
-#             debt_column = numeric_columns[-1]  # последняя числовая колонка
-#             print(f"Fallback: Используем числовую колонку как долг: {debt_column}")
-#         else:
-#             debt_column = accruals_df.columns[-1]  # последняя колонка вообще
-#             print(f"Fallback: Колонка с долгом не найдена, используем последнюю колонку: {debt_column}")
-    
-#     results = []
-    
-#     # Обрабатываем только строки с Протоколом №1 (актуальные данные)
-#     protocol_rows = accruals_df[accruals_df['номер договора'].str.contains('Протокол № 1', na=False)]
-    
-#     print(f"Fallback: Найдено {len(protocol_rows)} записей с Протоколом №1")
-    
-#     for _, row in protocol_rows.iterrows():
-#         name = row['контрагенты']
-#         debt = row[debt_column] if debt_column in row else 0
-        
-#         # Пропускаем если долга нет или он 0 или пустая строка
-#         if pd.isna(debt) or debt == 0 or debt == '':
-#             continue
-            
-#         print(f"Fallback: Обрабатываем {name}")
-#         print(f"Fallback: Долг из колонки '{debt_column}': {debt}")
-        
-#         # Ищем в персональных данных
-#         name_clean = name.split('(')[0].strip()
-#         personal_data = personal_df[personal_df['Контрагенты'].str.contains(name_clean, na=False)]
-        
-#         has_personal_data = len(personal_data) > 0
-#         address = ""
-#         contract_number = ""
-        
-#         if has_personal_data:
-#             personal_row = personal_data.iloc[0]
-#             address = personal_row['Адрес проживания']
-#             contract_number = personal_row['Кадастровый номер']
-#             print(f"Fallback: Найдены персональные данные: адрес={address}, договор={contract_number}")
-#         else:
-#             print(f"Fallback: Персональные данные не найдены")
-        
-#         # Извлекаем адрес СНТ из названия контрагента
-#         snt_address_match = re.search(r'\(([^)]+)\)', name)
-#         snt_address = snt_address_match.group(1) if snt_address_match else ""
-        
-#         results.append({
-#             'fio': name,
-#             'address': address,
-#             'snt_address': snt_address,
-#             'kadastr_number': contract_number,
-#             'email': '_________________________',
-#             'phone': '_________________________', 
-#             'contract_number': contract_number,
-#             'debt_amount': debt,
-#             'has_personal_data': has_personal_data
-#         })
-    
-#     print(f"Fallback: Всего найдено {len(results)} записей с долгом")
-#     return results

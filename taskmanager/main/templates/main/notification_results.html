@@ -1,0 +1,140 @@
+{% extends 'main/base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- Результаты рассылки -->
+            <div class="alert alert-success border-0 shadow-sm">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-check-circle-fill me-3 fs-2"></i>
+                    <div>
+                        <h4 class="mb-2">Рассылка завершена!</h4>
+                        <p class="mb-0">
+                            <strong>SMS отправлено:</strong> {{ sms_sent }} | 
+                            <strong>Email отправлено:</strong> {{ emails_sent }} |
+                            <strong>Всего должников:</strong> {{ total_debtors }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Детальные результаты -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-list-check me-2"></i>
+                        Детальные результаты рассылки
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>ФИО</th>
+                                    <th>Участок</th>
+                                    <th>Долг</th>
+                                    <th>Телефон</th>
+                                    <th>Email</th>
+                                    <th>SMS</th>
+                                    <th>Email</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for result in results %}
+                                <tr>
+                                    <td><strong>{{ result.fio }}</strong></td>
+                                    <td>{{ result.snt_address }}</td>
+                                    <td><strong class="text-danger">{{ result.debt_amount|floatformat:2 }} руб.</strong></td>
+                                    <td>
+                                        {% if result.phone != '_________________________' %}
+                                            <span class="text-success">{{ result.phone }}</span>
+                                        {% else %}
+                                            <span class="text-muted fst-italic">Нет данных</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if result.email != '_________________________' %}
+                                            <span class="text-primary">{{ result.email }}</span>
+                                        {% else %}
+                                            <span class="text-muted fst-italic">Нет данных</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if result.sms_sent %}
+                                            <span class="badge bg-success">
+                                                <i class="bi bi-check-lg"></i>
+                                                Отправлено
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">
+                                                <i class="bi bi-x-lg"></i>
+                                                Не отправлено
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if result.email_sent %}
+                                            <span class="badge bg-success">
+                                                <i class="bi bi-check-lg"></i>
+                                                Отправлено
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">
+                                                <i class="bi bi-x-lg"></i>
+                                                Не отправлено
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Кнопки действий -->
+            <div class="text-center mt-4">
+                <div class="btn-group" role="group">
+                    <a href="{% url 'process_business_files' %}" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-left"></i>
+                        Назад к результатам
+                    </a>
+                    <a href="{% url 'business' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-upload"></i>
+                        Новые файлы
+                    </a>
+                    <a href="{% url 'download_business_zip' %}" class="btn btn-success">
+                        <i class="bi bi-file-earmark-zip"></i>
+                        Скачать ZIP
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    border-radius: 12px;
+}
+
+.table th {
+    font-weight: 600;
+    background: #f8f9fa;
+}
+
+.badge {
+    font-weight: 500;
+}
+
+.btn {
+    border-radius: 8px;
+}
+</style>
+
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+{% endblock %}

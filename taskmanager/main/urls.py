@@ -17,4 +17,5 @@ urlpatterns = [
     path('business/generate/', views.generate_business_claims, name='generate_business_claims'),
     path('business/download/', views.download_business_zip, name='download_business_zip'),
     path('business/send-emails/', views.send_business_emails, name='send_business_emails'),
+    path('business/process/notifications/', views.send_bulk_notifications, name='send_bulk_notifications'),
 ]

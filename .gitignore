@@ -250,3 +250,10 @@ db.sqlite3
 *copy*
 *Copy*
 *.sqlite3*
+*.xlsx*
+*.xlsx*
+*data/business/*
+*.xlsx
+*.xls
+*taskmanager/data/business/*.xlsx
+*business*
