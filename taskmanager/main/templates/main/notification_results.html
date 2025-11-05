@@ -4,6 +4,355 @@
 <div class="container-fluid mt-4">
     <div class="row justify-content-center">
         <div class="col-lg-10">
+            <!-- СТАТИСТИКА РАССЫЛКИ -->
+            <div class="alert alert-success border-0 shadow-sm">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="mb-3">📊 Результаты рассылки</h5>
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <div class="stat-number">{{ total_debtors }}</div>
+                                <div class="stat-label">Всего должников</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-number">{{ sms_sent }}</div>
+                                <div class="stat-label">SMS отправлено</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-number">{{ emails_sent }}</div>
+                                <div class="stat-label">Email отправлено</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge bg-success fs-6">
+                            <i class="bi bi-check-circle-fill me-1"></i>
+                            Завершено
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ДЕТАЛЬНАЯ СТАТИСТИКА -->
+            <div class="alert alert-info mt-4 border-0 shadow-sm">
+                <h6 class="d-flex align-items-center mb-3">
+                    <i class="bi bi-graph-up me-2"></i>
+                    Детальная статистика рассылки
+                </h6>
+                <div class="row text-center">
+                    <div class="col-md-3 mb-3">
+                        <div class="stat-mini">
+                            <div class="stat-mini-number">{{ stats.with_personal_data|default:results|length }}</div>
+                            <div class="stat-mini-label">С персональными данными</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="stat-mini">
+                            <div class="stat-mini-number text-success">{{ stats.sms_sent|default:sms_sent }}</div>
+                            <div class="stat-mini-label">SMS отправлено</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="stat-mini">
+                            <div class="stat-mini-number text-primary">{{ stats.emails_sent|default:emails_sent }}</div>
+                            <div class="stat-mini-label">Email отправлено</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="stat-mini">
+                            <div class="stat-mini-number text-info">
+                                {% widthratio stats.with_personal_data|default:results|length stats.total|default:total_debtors 100 %}%
+                            </div>
+                            <div class="stat-mini-label">Охват данных</div>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if stats %}
+                <div class="mt-3 pt-3 border-top">
+                    <div class="row text-center">
+                        <div class="col-md-4">
+                            <small class="text-muted">📱 С телефоном: {{ stats.with_phone }}</small>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">📧 С email: {{ stats.with_email }}</small>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">⏭️ Пропущено: {{ stats.skipped_no_data|add:stats.skipped_no_contact }}</small>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- КНОПКИ ДЕЙСТВИЙ -->
+            <div class="action-buttons mt-4">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <a href="{% url 'process_business_files' %}" class="btn btn-outline-primary btn-lg w-100">
+                            <i class="bi bi-arrow-left"></i>
+                            Назад к результатам
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <a href="{% url 'business' %}" class="btn btn-outline-secondary btn-lg w-100">
+                            <i class="bi bi-upload"></i>
+                            Новые файлы
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <a href="{% url 'download_business_zip' %}" class="btn btn-success btn-lg w-100 shadow">
+                            <i class="bi bi-file-earmark-zip"></i>
+                            Скачать ZIP
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- СВОДНАЯ СТАТИСТИКА -->
+            {% if results %}
+            <div class="alert alert-info mt-4 border-0 shadow-sm">
+                <h6 class="d-flex align-items-center mb-3">
+                    <i class="bi bi-graph-up me-2"></i>
+                    Сводная статистика
+                </h6>
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="stat-mini">
+                            <div class="stat-mini-number">{{ results|length }}</div>
+                            <div class="stat-mini-label">Обработано</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-mini">
+                            <div class="stat-mini-number text-success">{{ sms_sent }}</div>
+                            <div class="stat-mini-label">Успешных SMS</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-mini">
+                            <div class="stat-mini-number text-primary">{{ emails_sent }}</div>
+                            <div class="stat-mini-label">Успешных Email</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-mini">
+                            <div class="stat-mini-number text-warning">{{ results|length|add:sms_sent|add:emails_sent|divisibleby:3|default:0 }}</div>
+                            <div class="stat-mini-label">Эффективность</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+/* Стили статистики */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.stat-item {
+    text-align: center;
+    padding: 15px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.stat-number {
+    font-size: 24px;
+    font-weight: bold;
+    color: #0d6efd;
+    margin-bottom: 5px;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Мини-статистика */
+.stat-mini {
+    padding: 10px;
+}
+
+.stat-mini-number {
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.stat-mini-label {
+    font-size: 11px;
+    color: #6c757d;
+    text-transform: uppercase;
+}
+
+/* Стили таблицы */
+.card {
+    border-radius: 12px;
+}
+
+.table th {
+    font-weight: 600;
+    background: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.table td {
+    vertical-align: middle;
+    padding: 12px 8px;
+}
+
+.table tr:hover {
+    background-color: #f8f9fa;
+}
+
+.table-success {
+    background-color: #d1edff !important;
+}
+
+/* Стили кнопок */
+.action-buttons .btn {
+    border-radius: 10px;
+    padding: 15px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.action-buttons .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Бейджи */
+.badge {
+    font-weight: 500;
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+
+.badge bg-success {
+    background: linear-gradient(45deg, #198754, #20c997);
+}
+
+.badge bg-secondary {
+    background: linear-gradient(45deg, #6c757d, #a0a0a0);
+}
+
+/* Алерты */
+.alert {
+    border-radius: 12px;
+    border: none;
+}
+
+.alert-success {
+    background: linear-gradient(135deg, #d4edda, #c3e6cb);
+}
+
+.alert-info {
+    background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .stat-number {
+        font-size: 20px;
+    }
+    
+    .action-buttons .btn {
+        margin-bottom: 10px;
+        font-size: 14px;
+        padding: 12px;
+    }
+    
+    .table {
+        font-size: 14px;
+    }
+    
+    .table th,
+    .table td {
+        padding: 8px 4px;
+    }
+}
+
+@media (max-width: 576px) {
+    .table-responsive {
+        font-size: 12px;
+    }
+    
+    .badge {
+        font-size: 11px;
+        padding: 4px 8px;
+    }
+    
+    .stat-mini-number {
+        font-size: 16px;
+    }
+    
+    .stat-mini-label {
+        font-size: 10px;
+    }
+}
+
+/* Анимации */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.card, .alert {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* Иконки */
+.bi {
+    vertical-align: -0.125em;
+}
+
+/* Кастомные цвета текста */
+.text-success {
+    color: #198754 !important;
+}
+
+.text-primary {
+    color: #0d6efd !important;
+}
+
+.text-danger {
+    color: #dc3545 !important;
+}
+
+.text-warning {
+    color: #fd7e14 !important;
+}
+</style>
+
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+{% endblock %}
+
+
+
+{% comment %} {% extends 'main/base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
             <!-- Результаты рассылки -->
             <div class="alert alert-success border-0 shadow-sm">
                 <div class="d-flex align-items-center">
@@ -137,4 +486,4 @@
 
 <!-- Bootstrap Icons -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-{% endblock %}
+{% endblock %} {% endcomment %}

@@ -18,4 +18,6 @@ urlpatterns = [
     path('business/download/', views.download_business_zip, name='download_business_zip'),
     path('business/send-emails/', views.send_business_emails, name='send_business_emails'),
     path('business/process/notifications/', views.send_bulk_notifications, name='send_bulk_notifications'),
+    path('business/notifications/results/<int:campaign_id>/', views.notification_results, name='notification_results'),
+    path('business/notifications/send/', views.send_bulk_notifications, name='send_bulk_notifications')
 ]

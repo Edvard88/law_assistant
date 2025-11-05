@@ -99,3 +99,33 @@ class BusinessClient(models.Model):
     class Meta:
         verbose_name = 'Бизнес-клиент'
         verbose_name_plural = 'Бизнес-клиенты'
+
+class NotificationCampaign(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    campaign_name = models.CharField("Название рассылки", max_length=255, blank=True)
+    total_debtors = models.IntegerField("Всего должников", default=0)
+    sms_sent = models.IntegerField("SMS отправлено", default=0)
+    emails_sent = models.IntegerField("Email отправлено", default=0)
+    status = models.CharField("Статус", max_length=50, default='processing')
+    
+    def __str__(self):
+        return f"Рассылка от {self.created_at.strftime('%d.%m.%Y %H:%M')}"
+    
+    class Meta:
+        verbose_name = 'Рассылка'
+        verbose_name_plural = 'Рассылки'
+
+class NotificationResult(models.Model):
+    campaign = models.ForeignKey(NotificationCampaign, on_delete=models.CASCADE, related_name='results')
+    fio = models.CharField("ФИО", max_length=255)
+    snt_address = models.CharField("Адрес СНТ", max_length=255)
+    debt_amount = models.DecimalField("Сумма долга", max_digits=12, decimal_places=2)
+    phone = models.CharField("Телефон", max_length=20, blank=True)
+    email = models.CharField("Email", max_length=255, blank=True)
+    sms_sent = models.BooleanField("SMS отправлено", default=False)
+    email_sent = models.BooleanField("Email отправлено", default=False)
+    sent_at = models.DateTimeField("Отправлено", auto_now_add=True)
+    
+    class Meta:
+        verbose_name = 'Результат рассылки'
+        verbose_name_plural = 'Результаты рассылки'

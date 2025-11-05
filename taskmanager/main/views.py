@@ -36,6 +36,8 @@ import os
 from datetime import datetime
 
 
+from .models import LawIssue, BusinessClient, NotificationCampaign, NotificationResult
+
 import logging
 # Настройка логгера
 logger = logging.getLogger(__name__)
@@ -1174,89 +1176,321 @@ def send_email_notification(email, subject, message):
         print(f"❌ Ошибка отправки email: {e}")
         return False
 
+
 def send_bulk_notifications(request):
     """
-    Массовая рассылка SMS и email всем должникам
+    Массовая рассылка SMS и email только должникам с полными данными
     """
     if request.method == 'POST':
-        claims_data = request.session.get('all_claims_data', [])
+        all_claims_data = request.session.get('all_claims_data', [])
         
-        if not claims_data:
+        print(f"🔔 Начало рассылки: получено {len(all_claims_data)} должников")
+        
+        if not all_claims_data:
+            print("❌ Нет данных для рассылки")
             return HttpResponse('Нет данных для рассылки')
         
         # Статистика
-        sms_sent = 0
-        emails_sent = 0
-        total_debtors = len(claims_data)
+        stats = {
+            'total': len(all_claims_data),
+            'with_debt': 0,
+            'with_personal_data': 0,
+            'with_phone': 0,
+            'with_email': 0,
+            'sms_sent': 0,
+            'emails_sent': 0,
+            'skipped_no_data': 0,
+            'skipped_no_contact': 0
+        }
+        
+        # Создаем кампанию в БД
+        campaign = NotificationCampaign.objects.create(
+            campaign_name=f"Рассылка от {datetime.now().strftime('%d.%m.%Y %H:%M')}",
+            total_debtors=stats['total'],
+            status='processing'
+        )
         
         results = []
         
-        for claim in claims_data:
+        for claim in all_claims_data:
             fio = claim.get('fio', '')
             phone = claim.get('phone', '')
             email_addr = claim.get('email', '')
             debt_amount = claim.get('debt_amount', 0)
             snt_address = claim.get('snt_address', '')
+            has_personal_data = claim.get('has_personal_data', False)
             
             # Пропускаем если нет долга
             if debt_amount <= 0:
                 continue
+            stats['with_debt'] += 1
             
-            result = {
-                'fio': fio,
-                'phone': phone,
-                'email': email_addr,
-                'debt_amount': debt_amount,
-                'snt_address': snt_address,
-                'sms_sent': False,
-                'email_sent': False
-            }
+            # Пропускаем если нет персональных данных
+            if not has_personal_data:
+                print(f"⏭️ Пропускаем {fio} - нет персональных данных")
+                stats['skipped_no_data'] += 1
+                continue
+            stats['with_personal_data'] += 1
+            
+            # Обрабатываем контактные данные
+            phone_value = phone if phone and phone != '_________________________' else ''
+            email_value = email_addr if email_addr and email_addr != '_________________________' else ''
+            
+            has_phone = bool(phone_value)
+            has_email = bool(email_value)
+            
+            if has_phone:
+                stats['with_phone'] += 1
+            if has_email:
+                stats['with_email'] += 1
+            
+            # Пропускаем если нет контактных данных
+            if not has_phone and not has_email:
+                print(f"📵 Пропускаем {fio} - нет контактных данных")
+                stats['skipped_no_contact'] += 1
+                continue
+            
+            # Создаем запись результата
+            result = NotificationResult.objects.create(
+                campaign=campaign,
+                fio=fio,
+                snt_address=snt_address,
+                debt_amount=debt_amount,
+                phone=phone_value,
+                email=email_value
+            )
             
             # Отправка SMS
-            if phone and phone != '_________________________':
-                sms_message = f"{fio},задолжен, по {snt_address} в размере {debt_amount:,.2f} руб"
-                if send_sms_notification(phone, sms_message):
-                    sms_sent += 1
-                    result['sms_sent'] = True
+            sms_success = False
+            if has_phone:
+                sms_message = f"Уважаемый {fio}, у вас есть задолженность по {snt_address} в размере {debt_amount:,.2f} руб."
+                print(f"📱 Пытаемся отправить SMS на {phone_value}")
+                if send_sms_notification(phone_value, sms_message):
+                    stats['sms_sent'] += 1
+                    sms_success = True
             
-            # Отправка Email
-            if email_addr and email_addr != '_________________________':
-                email_subject = f"Уведомление о задолженности - {snt_address}"
-                
-                email_message = f"""Уважаемый {fio} собственник {snt_address} в КП "Крона"!
-
-Напоминаем вам о важности своевременной оплаты счетов за услуги, предоставляемые ООО «УК ДАР». Оплата счетов должна осуществляться до 10-го числа каждого месяца.
-
-⌛️ Несвоевременная оплата может привести к образованию задолженности, что, в свою очередь, может повлиять на качество и непрерывность предоставления эксплуатационных услуг. 
-
-⚠️ В настоящий момент у вас числится задолженность в размере {debt_amount:,.2f} руб.
-
-🚨Обращаем Ваше внимание, что в соответствии с установленными правилами, при наличии задолженности более одного календарного месяца, собственник можете быть ограничен в предоставлении эксплуатационных услуг, а также отключен от системы дистанционных заказов пропусков Pass 24.online. В указанном случае проезд на территорию будет осуществляется на основании бумажных пропусков, оформленных в порядке, предусмотренном положением об организации въезда и выезда транспортных средств.🚨
-
-📱 Для обсуждения вопросов, связанных с оплатой, вы можете связаться с представителем ООО «УК ДАР» по телефону 8 (915) 173-71-43 (доступен WhatsApp, Telegram, SMS) или по электронной почте: yk.dar@ya.ru.
-
-С уважением,
-ООО «УК ДАР»"""
-                
-                if send_email_notification(email_addr, email_subject, email_message):
-                    emails_sent += 1
-                    result['email_sent'] = True
+            # Отправка Email через SMTP
+            email_success = False
+            if has_email:
+                print(f"📧 Пытаемся отправить email на {email_value}")
+                if send_debt_email_smtp(email_value, fio, snt_address, debt_amount):
+                    stats['emails_sent'] += 1
+                    email_success = True
             
-            results.append(result)
+            # Обновляем результат в БД
+            result.sms_sent = sms_success
+            result.email_sent = email_success
+            result.save()
+            
+            results.append({
+                'fio': fio,
+                'snt_address': snt_address,
+                'debt_amount': debt_amount,
+                'phone': phone_value,
+                'email': email_value,
+                'sms_sent': sms_success,
+                'email_sent': email_success,
+                'has_personal_data': has_personal_data
+            })
         
-        # Сохраняем результаты в сессии
+        # Обновляем статистику кампании
+        campaign.sms_sent = stats['sms_sent']
+        campaign.emails_sent = stats['emails_sent']
+        campaign.status = 'completed'
+        campaign.save()
+        
+        # Сохраняем детальную статистику в сессии для отображения
+        request.session['notification_stats'] = stats
         request.session['notification_results'] = results
-        request.session['sms_sent_count'] = sms_sent
-        request.session['emails_sent_count'] = emails_sent
+        
+        print(f"✅ Рассылка завершена:")
+        print(f"   📊 Всего должников: {stats['total']}")
+        print(f"   💰 С долгом: {stats['with_debt']}")
+        print(f"   👤 С персональными данными: {stats['with_personal_data']}")
+        print(f"   📱 С телефоном: {stats['with_phone']}")
+        print(f"   📧 С email: {stats['with_email']}")
+        print(f"   📤 SMS отправлено: {stats['sms_sent']}")
+        print(f"   📤 Email отправлено: {stats['emails_sent']}")
+        print(f"   ⏭️ Пропущено (нет данных): {stats['skipped_no_data']}")
+        print(f"   ⏭️ Пропущено (нет контактов): {stats['skipped_no_contact']}")
+        
+        # Перенаправляем на страницу результатов
+        return redirect('notification_results', campaign_id=campaign.id)
+    
+    return redirect('process_business_files')
+
+
+def notification_results(request, campaign_id):
+    """Страница с результатами рассылки"""
+    try:
+        campaign = NotificationCampaign.objects.get(id=campaign_id)
+        results = campaign.results.all()
+        
+        # Получаем статистику из сессии
+        stats = request.session.get('notification_stats', {})
         
         context = {
-            'total_debtors': total_debtors,
-            'sms_sent': sms_sent,
-            'emails_sent': emails_sent,
+            'campaign': campaign,
             'results': results,
+            'total_debtors': campaign.total_debtors,
+            'sms_sent': campaign.sms_sent,
+            'emails_sent': campaign.emails_sent,
+            'stats': stats,
             'has_results': True
         }
         
         return render(request, 'main/notification_results.html', context)
+        
+    except NotificationCampaign.DoesNotExist:
+        return HttpResponse('Рассылка не найдена')
     
-    return redirect('process_business_files')
+
+
+def send_debt_email_smtp(email_addr, fio, snt_address, debt_amount):
+    """Отправка email через SMTP (как в send_pdf_email)"""
+    try:
+        import smtplib
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        
+        # Рендерим HTML контент
+        context = {
+            'fio': fio,
+            'snt_address': snt_address,
+            'debt_amount': debt_amount,
+        }
+        html_content = render_to_string('main/debt_notification_email.html', context)
+        
+        # Создаем сообщение (как в send_pdf_email)
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f"Задолженность перед ООО «УК ДАР» - {snt_address}"
+        msg['From'] = settings.DEFAULT_FROM_EMAIL
+        msg['To'] = email_addr
+        
+        # Копии (как в send_pdf_email)
+        copy_emails =  ['edvard88@inbox.ru', '89036414195@mail.ru']
+        msg['Cc'] = ', '.join(copy_emails)
+        
+        # Текстовая версия
+        text_content = f"""Уважаемый {fio} собственник {snt_address} в КП "Крона"!
+
+Напоминаем вам о задолженности в размере {debt_amount:,.2f} руб.
+
+С уважением,
+ООО «УК ДАР»"""
+        
+        # Прикрепляем обе версии
+        part1 = MIMEText(text_content, 'plain', 'utf-8')
+        part2 = MIMEText(html_content, 'html', 'utf-8')
+        
+        msg.attach(part1)
+        msg.attach(part2)
+        
+        # Формируем список получателей
+        recipients = [email_addr] + copy_emails
+        
+        # Отправляем через SMTP (как в send_pdf_email)
+        if getattr(settings, 'EMAIL_USE_SSL', False):
+            server = smtplib.SMTP_SSL(settings.EMAIL_HOST, settings.EMAIL_PORT)
+        else:
+            server = smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT)
+            if getattr(settings, 'EMAIL_USE_TLS', False):
+                server.starttls()
+        
+        server.login(settings.EMAIL_HOST_USER, settings.EMAIL_HOST_PASSWORD)
+        server.sendmail(settings.DEFAULT_FROM_EMAIL, recipients, msg.as_string())
+        server.quit()
+        
+        print(f"✅ Email отправлен через SMTP на {email_addr}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Ошибка отправки email через SMTP: {e}")
+        return False
+
+# def send_bulk_notifications(request):
+#     """
+#     Массовая рассылка SMS и email всем должникам
+#     """
+#     if request.method == 'POST':
+#         claims_data = request.session.get('all_claims_data', [])
+        
+#         if not claims_data:
+#             return HttpResponse('Нет данных для рассылки')
+        
+#         # Статистика
+#         sms_sent = 0
+#         emails_sent = 0
+#         total_debtors = len(claims_data)
+        
+#         results = []
+        
+#         for claim in claims_data:
+#             fio = claim.get('fio', '')
+#             phone = claim.get('phone', '')
+#             email_addr = claim.get('email', '')
+#             debt_amount = claim.get('debt_amount', 0)
+#             snt_address = claim.get('snt_address', '')
+            
+#             # Пропускаем если нет долга
+#             if debt_amount <= 0:
+#                 continue
+            
+#             result = {
+#                 'fio': fio,
+#                 'phone': phone,
+#                 'email': email_addr,
+#                 'debt_amount': debt_amount,
+#                 'snt_address': snt_address,
+#                 'sms_sent': False,
+#                 'email_sent': False
+#             }
+            
+#             # Отправка SMS
+#             if phone and phone != '_________________________':
+#                 sms_message = f"{fio},задолжен, по {snt_address} в размере {debt_amount:,.2f} руб"
+#                 if send_sms_notification(phone, sms_message):
+#                     sms_sent += 1
+#                     result['sms_sent'] = True
+            
+#             # Отправка Email
+#             if email_addr and email_addr != '_________________________':
+#                 email_subject = f"Уведомление о задолженности - {snt_address}"
+                
+#                 email_message = f"""Уважаемый {fio} собственник {snt_address} в КП "Крона"!
+
+# Напоминаем вам о важности своевременной оплаты счетов за услуги, предоставляемые ООО «УК ДАР». Оплата счетов должна осуществляться до 10-го числа каждого месяца.
+
+# ⌛️ Несвоевременная оплата может привести к образованию задолженности, что, в свою очередь, может повлиять на качество и непрерывность предоставления эксплуатационных услуг. 
+
+# ⚠️ В настоящий момент у вас числится задолженность в размере {debt_amount:,.2f} руб.
+
+# 🚨Обращаем Ваше внимание, что в соответствии с установленными правилами, при наличии задолженности более одного календарного месяца, собственник можете быть ограничен в предоставлении эксплуатационных услуг, а также отключен от системы дистанционных заказов пропусков Pass 24.online. В указанном случае проезд на территорию будет осуществляется на основании бумажных пропусков, оформленных в порядке, предусмотренном положением об организации въезда и выезда транспортных средств.🚨
+
+# 📱 Для обсуждения вопросов, связанных с оплатой, вы можете связаться с представителем ООО «УК ДАР» по телефону 8 (915) 173-71-43 (доступен WhatsApp, Telegram, SMS) или по электронной почте: yk.dar@ya.ru.
+
+# С уважением,
+# ООО «УК ДАР»"""
+                
+#                 if send_email_notification(email_addr, email_subject, email_message):
+#                     emails_sent += 1
+#                     result['email_sent'] = True
+            
+#             results.append(result)
+        
+#         # Сохраняем результаты в сессии
+#         request.session['notification_results'] = results
+#         request.session['sms_sent_count'] = sms_sent
+#         request.session['emails_sent_count'] = emails_sent
+        
+#         context = {
+#             'total_debtors': total_debtors,
+#             'sms_sent': sms_sent,
+#             'emails_sent': emails_sent,
+#             'results': results,
+#             'has_results': True
+#         }
+        
+#         return render(request, 'main/notification_results.html', context)
+    
+#     return redirect('process_business_files')
