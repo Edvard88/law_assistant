@@ -1262,12 +1262,12 @@ def send_bulk_notifications(request):
             
             # Отправка SMS
             sms_success = False
-            if has_phone:
-                sms_message = f"Уважаемый {fio}, у вас есть задолженность по {snt_address} в размере {debt_amount:,.2f} руб."
-                print(f"📱 Пытаемся отправить SMS на {phone_value}")
-                if send_sms_notification(phone_value, sms_message):
-                    stats['sms_sent'] += 1
-                    sms_success = True
+            # if has_phone:
+            #     sms_message = f"Ув. {fio}, по {snt_address} имеется задолжность {debt_amount:,.2f} руб. В случае неуплаты возможно ограничение эксплуатационных и иных видов услуг. ООО УК ДАР"
+            #     print(f"📱 Пытаемся отправить SMS на {phone_value}")
+            #     if send_sms_notification(phone_value, sms_message):
+            #         stats['sms_sent'] += 1
+            #         sms_success = True
             
             # Отправка Email через SMTP
             email_success = False

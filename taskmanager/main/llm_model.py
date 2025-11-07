@@ -223,7 +223,7 @@ def business_model_predict(uploaded_files, template_content=None):
 {
     "fio": "ФИО должника (точно как в файле)",
     "address": "Адрес проживания", 
-    "snt_address": "Адрес СНТ (дом и участок)",
+    "snt_address": "Адрес СНТ (только дом и участок)",
     "kadastr_number": "Кадастровый номер",
     "email": "Электронная почта",
     "phone": "Телефон", 
@@ -234,6 +234,7 @@ def business_model_predict(uploaded_files, template_content=None):
 
 Верни ТОЛЬКО JSON массив со ВСЕМИ найденными должниками с долгом > 0 рублей!
 """
+
 
     try:
         # Читаем и подготавливаем данные
